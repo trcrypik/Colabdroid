@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>COLAB TERMINAL</title>
+  <style>
+    :root {
+      --bg: #07090e;
+      --card-bg: #0d121d;
+      --border: #1f2b3e;
+      --text: #00ff66;
+      --text-dim: #00993d;
+      --cyan: #00f0ff;
+      --amber: #ffb000;
+      --red: #ff3366;
+      --dark: #050608;
+      --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.4;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+    /* CRT Scanline effect */
+    body::before {
+      content: " ";
+      position: fixed;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      z-index: 999;
+      pointer-events: none;
+      opacity: 0.35;
+    }
+    header {
+      background: var(--dark);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .brand {
+      font-size: 15px;
+      font-weight: bold;
+      color: var(--text);
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-shadow: 0 0 8px rgba(0,255,102,0.4);
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: 11px;
+      background: rgba(0,255,102,0.05);
+    }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text);
+      box-shadow: 0 0 6px var(--text);
+    }
+    .dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+    .dot.warning { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+    nav {
+      display: flex;
+      gap: 4px;
+      background: var(--dark);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 12px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #718096;
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text); border-color: var(--border); }
+    .tab-btn.active {
+      color: var(--text);
+      background: var(--card-bg);
+      border: 1px solid var(--text-dim);
+      border-bottom: 1px solid var(--bg);
+      text-shadow: 0 0 5px rgba(0,255,102,0.4);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      gap: 12px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .tab-content { display: none; flex-direction: column; flex: 1; gap: 12px; }
+    .tab-content.active { display: flex; }
+
+    /* Terminal View */
+    .terminal-container {
+      background: var(--dark);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 480px;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+    }
+    .terminal-header {
+      background: #090d14;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--cyan);
+      font-size: 11px;
+    }
+    .terminal-logs {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #d1d5db;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .terminal-input-bar {
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      background: #090d14;
+      padding: 6px 12px;
+      gap: 8px;
+    }
+    .prompt-label {
+      color: var(--text);
+      font-weight: bold;
+      user-select: none;
+    }
+    .terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+    .btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.15s;
+    }
+    .btn:hover {
+      border-color: var(--text);
+      background: rgba(0,255,102,0.1);
+      box-shadow: 0 0 8px rgba(0,255,102,0.2);
+    }
+    .btn.btn-cyan { color: var(--cyan); border-color: rgba(0,240,255,0.4); }
+    .btn.btn-cyan:hover { border-color: var(--cyan); background: rgba(0,240,255,0.1); }
+    .btn.btn-danger { color: var(--red); border-color: rgba(255,51,102,0.4); }
+    .btn.btn-danger:hover { border-color: var(--red); background: rgba(255,51,102,0.1); }
+
+    /* Quick Action Chips */
+    .quick-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 6px 0;
+    }
+    .chip {
+      background: var(--dark);
+      border: 1px solid var(--border);
+      color: var(--cyan);
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      border-radius: 2px;
+    }
+    .chip:hover { border-color: var(--cyan); color: #fff; }
+
+    /* Cards & Panels */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-title {
+      color: var(--cyan);
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px dashed rgba(255,255,255,0.06);
+    }
+    .stat-label { color: #8892b0; font-size: 11px; }
+    .stat-val { color: #fff; font-weight: bold; font-size: 11px; }
+
+    .meter-bar {
+      width: 100%;
+      height: 8px;
+      background: #111;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .meter-fill {
+      height: 100%;
+      background: var(--text);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .meter-fill.warn { background: var(--amber); }
+    .meter-fill.crit { background: var(--red); }
+
+    input[type="text"], select, textarea {
+      background: var(--dark);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 8px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      border-radius: 3px;
+      outline: none;
+      width: 100%;
+    }
+    input[type="text"]:focus, select:focus, textarea:focus {
+      border-color: var(--text);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <span>[⚡]</span>
+      <span>COLAB CLI // NORTHFLANK HUB</span>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <div id="authStatusBadge" class="status-badge">
+        <span class="dot offline"></span>
+        <span id="authStatusText">AUTH CHECK</span>
+      </div>
+      <div class="status-badge">
+        <span style="color: var(--cyan);">SESSION:</span>
+        <span id="currentSessionLabel">DEFAULT</span>
+      </div>
+    </div>
+  </header>
+
+  <nav>
+    <button class="tab-btn active" onclick="switchTab('terminal')">[ &gt;_ TERMINAL ]</button>
+    <button class="tab-btn" onclick="switchTab('sessions')">[ # SESSIONS ]</button>
+    <button class="tab-btn" onclick="switchTab('hardware')">[ $ HARDWARE &amp; GPU ]</button>
+    <button class="tab-btn" onclick="switchTab('files')">[ ~ FILES ]</button>
+    <button class="tab-btn" onclick="switchTab('auth')">[ * AUTH &amp; CONFIG ]</button>
+  </nav>
+
+  <main>
+    <!-- TAB 1: TERMINAL -->
+    <div id="tab-terminal" class="tab-content active">
+      <div class="quick-bar">
+        <div class="chip" onclick="sendQuick('!nvidia-smi')">[!nvidia-smi]</div>
+        <div class="chip" onclick="sendQuick('!lscpu; free -h; df -h')">[Sys Specs]</div>
+        <div class="chip" onclick="sendQuick('python -c &quot;import torch; print(\'Torch CUDA:\', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else \'\')&quot;')">[PyTorch CUDA Check]</div>
+        <div class="chip" onclick="sendQuick('!pip list | grep -E &quot;torch|tensorflow|jax&quot;')">[ML Libs]</div>
+        <div class="chip" onclick="sendQuick('!top -b -n 1 | head -n 12')">[Top Processes]</div>
+        <div class="chip" onclick="sendQuick('clear')">[Clear]</div>
+      </div>
+
+      <div class="terminal-container">
+        <div class="terminal-header">
+          <span>CONSOLE OUTPUT // LIVE STDIN/STDOUT</span>
+          <span id="termStatus">READY</span>
+        </div>
+        <div id="terminalLogs" class="terminal-logs">Welcome to Colab CLI Web Terminal.
+Connecting to Northflank backend...
+</div>
+        <form class="terminal-input-bar" onsubmit="handleCommand(event)">
+          <span class="prompt-label" id="promptText">root@colab:~#</span>
+          <input type="text" id="cmdInput" class="terminal-input" placeholder="Enter bash (!cmd) or python code..." autocomplete="off" autofocus />
+          <button type="submit" class="btn">[ RUN ]</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- TAB 2: SESSIONS -->
+    <div id="tab-sessions" class="tab-content">
+      <div class="card">
+        <div class="card-title">
+          <span>PROVISION NEW COLAB RUNTIME</span>
+          <span class="chip" onclick="loadSessions()">[ REFRESH ]</span>
+        </div>
+        <div class="grid" style="grid-template-columns: 1fr 1fr 1fr auto;">
+          <div>
+            <label class="stat-label">SESSION NAME</label>
+            <input type="text" id="newSessName" placeholder="e.g. t4-experiment" />
+          </div>
+          <div>
+            <label class="stat-label">ACCELERATOR</label>
+            <select id="newSessGpu">
+              <option value="NONE">CPU Runtime</option>
+              <option value="T4" selected>GPU: Tesla T4 (Standard)</option>
+              <option value="L4">GPU: NVIDIA L4</option>
+              <option value="A100">GPU: NVIDIA A100 (Pro)</option>
+              <option value="H100">GPU: NVIDIA H100 (Pro+)</option>
+              <option value="v5e1">TPU: v5e1</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 18px;">
+            <input type="checkbox" id="newSessHighMem" style="width: auto;">
+            <label for="newSessHighMem" class="stat-label">HIGH-RAM SHAPE</label>
+          </div>
+          <div style="display: flex; align-items: flex-end;">
+            <button class="btn btn-cyan" onclick="createSession()" style="width: 100%;">[ + ALLOCATE VM ]</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">ACTIVE COLAB SESSIONS</div>
+        <div id="sessionsListContainer" style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="color: #666;">Loading sessions...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: HARDWARE -->
+    <div id="tab-hardware" class="tab-content">
+      <div style="display: flex; justify-content: flex-end;">
+        <button class="btn" onclick="fetchHardwareStats()">[ REFRESH HARDWARE STATS ]</button>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="card-title">GPU ACCELERATOR</div>
+          <div id="gpuCardContent">
+            <div class="stat-row"><span class="stat-label">STATUS</span><span class="stat-val">Querying...</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">SYSTEM SPECS &amp; VM HEALTH</div>
+          <pre id="systemSpecsRaw" style="color: #8892b0; font-size: 11px; max-height: 250px; overflow-y: auto; white-space: pre-wrap;">Querying system...</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: FILES -->
+    <div id="tab-files" class="tab-content">
+      <div class="card">
+        <div class="card-title">
+          <span>REMOTE VM FILESYSTEM</span>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn" onclick="fetchFiles()">[ LIST /content ]</button>
+          </div>
+        </div>
+        <div id="fileListContainer" style="max-height: 350px; overflow-y: auto; background: var(--dark); padding: 8px; border-radius: 3px;">
+          <pre id="filesOutput" style="color: #a0aec0;">Click [ LIST /content ] to view files.</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: AUTH -->
+    <div id="tab-auth" class="tab-content">
+      <div class="card">
+        <div class="card-title">BACKEND CONNECTION (API)</div>
+        <p style="color: #8892b0; font-size: 12px; margin-bottom: 8px;">
+          For the Android APK or remote UI: set Northflank base URL and API key.
+          When opened from the same host as the backend, leave Base URL empty.
+        </p>
+        <label class="stat-label">BASE URL (e.g. https://colab-api.your-northflank.run — empty = same origin)</label>
+        <input type="text" id="cfgBaseUrl" placeholder="https://your-service.northflank.app" style="margin-top:4px;" />
+        <label class="stat-label" style="margin-top:8px;">API KEY (header x-api-key)</label>
+        <input type="password" id="cfgApiKey" placeholder="same as server API_KEY" style="margin-top:4px;" autocomplete="off" />
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <button class="btn btn-cyan" type="button" onclick="saveConnectionCfg()">[ SAVE CONNECTION ]</button>
+          <button class="btn" type="button" onclick="testConnection()">[ TEST /health ]</button>
+        </div>
+        <div id="cfgTestResult" style="margin-top:8px; color:#8892b0; font-size:11px;"></div>
+        <p style="color:#666; font-size:11px; margin-top:10px;">
+          Terminal mode: <b>line-exec</b> — each command runs as a separate <code>colab exec</code>.
+          Not a persistent interactive shell (cwd/env do not carry across lines like SSH).
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-title">GOOGLE COLAB AUTHENTICATION</div>
+        <p style="color: #8892b0; font-size: 12px;">
+          Connect your Google Account to authenticate the <code style="color: var(--cyan);">colab</code> CLI on Northflank.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+          <div>
+            <label class="stat-label">STEP 1: GET AUTHORIZATION URL</label>
+            <div style="display: flex; gap: 8px; margin-top: 4px;">
+              <button class="btn btn-cyan" onclick="getAuthUrl()">[ 1. GENERATE GOOGLE LOGIN LINK ]</button>
+              <a id="authLink" href="#" target="_blank" style="display:none; color: var(--cyan); align-self: center; text-decoration: underline;">Open Google Consent Screen</a>
+            </div>
+          </div>
+
+          <div>
+            <label class="stat-label">STEP 2: PASTE AUTHORIZATION CODE</label>
+            <div style="display: flex; gap: 8px; margin-top: 4px;">
+              <input type="text" id="authCodeInput" placeholder="Paste 4/0... code from Google screen" />
+              <button class="btn" onclick="submitAuthCode()">[ SUBMIT CODE ]</button>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid var(--border); padding-top: 10px;">
+            <label class="stat-label">ALTERNATIVE: PASTE RAW token.json CONTENT</label>
+            <textarea id="rawTokenInput" rows="4" placeholder='{"token": "...", "refresh_token": "...", ...}' style="margin-top: 4px;"></textarea>
+            <button class="btn" onclick="submitRawToken()" style="margin-top: 6px;">[ SAVE TOKEN.JSON ]</button>
+          </div>
+
+          <div style="border-top: 1px solid var(--border); padding-top: 10px; display: flex; justify-content: space-between;">
+            <button class="btn btn-danger" onclick="disconnectAuth()">[ REVOKE CREDENTIALS ]</button>
+            <button class="btn" onclick="checkAuth()">[ CHECK STATUS ]</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    let activeSession = '';
+    let ws = null;
+    let wsRetryTimer = null;
+
+    function getCfg() {
+      return {
+        base: (localStorage.getItem('colab_api_base') || '').replace(/\/$/, ''),
+        key: localStorage.getItem('colab_api_key') || ''
+      };
+    }
+    function apiUrl(p) {
+      const b = getCfg().base;
+      if (!p.startsWith('/')) p = '/' + p;
+      return b ? (b + p) : p;
+    }
+    function apiHeaders(extra) {
+      const h = Object.assign({}, extra || {});
+      const k = getCfg().key;
+      if (k) h['x-api-key'] = k;
+      return h;
+    }
+    async function apiFetch(path, opts) {
+      opts = opts || {};
+      opts.headers = apiHeaders(opts.headers || {});
+      return fetch(apiUrl(path), opts);
+    }
+    function loadConnectionCfgIntoForm() {
+      const c = getCfg();
+      const u = document.getElementById('cfgBaseUrl');
+      const k = document.getElementById('cfgApiKey');
+      if (u) u.value = c.base;
+      if (k) k.value = c.key;
+    }
+    function saveConnectionCfg() {
+      const base = (document.getElementById('cfgBaseUrl').value || '').trim().replace(/\/$/, '');
+      const key = (document.getElementById('cfgApiKey').value || '').trim();
+      localStorage.setItem('colab_api_base', base);
+      localStorage.setItem('colab_api_key', key);
+      document.getElementById('cfgTestResult').textContent = 'Saved. Reconnecting WebSocket…';
+      if (ws) try { ws.close(); } catch (e) {}
+    loadConnectionCfgIntoForm();
+    connectWS();
+    checkAuth();
+    }
+    async function testConnection() {
+      const el = document.getElementById('cfgTestResult');
+      el.textContent = 'Testing…';
+      try {
+        const r = await apiFetch('/health');
+        const d = await r.json();
+        el.textContent = 'OK: ' + JSON.stringify(d);
+        el.style.color = 'var(--text)';
+      } catch (e) {
+        el.textContent = 'FAIL: ' + e.message;
+        el.style.color = 'var(--red)';
+      }
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('tab-' + name).classList.add('active');
+
+      if (name === 'sessions') loadSessions();
+      if (name === 'hardware') fetchHardwareStats();
+      if (name === 'files') fetchFiles();
+      if (name === 'auth') { loadConnectionCfgIntoForm(); checkAuth(); }
+    }
+
+    function logTerminal(text, cls = '') {
+      const logs = document.getElementById('terminalLogs');
+      logs.textContent += text;
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    // Connect WebSocket
+    function connectWS() {
+      if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+      const c = getCfg();
+      let wsUrl;
+      if (c.base) {
+        try {
+          const u = new URL(c.base);
+          const wsProto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+          wsUrl = `${wsProto}//${u.host}/terminal?session=${encodeURIComponent(activeSession)}`;
+        } catch (e) {
+          logTerminal('\n[WS] Invalid base URL\n');
+          return;
+        }
+      } else {
+        const loc = window.location;
+        const wsProto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${wsProto}//${loc.host}/terminal?session=${encodeURIComponent(activeSession)}`;
+      }
+      if (c.key) wsUrl += `&api_key=${encodeURIComponent(c.key)}`;
+
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        document.getElementById('termStatus').textContent = 'ONLINE';
+        document.getElementById('termStatus').style.color = 'var(--text)';
+      };
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'stdout' || msg.type === 'stderr' || msg.type === 'banner' || msg.type === 'exec_end') {
+          logTerminal(msg.data || '');
+        } else if (msg.type === 'clear') {
+          document.getElementById('terminalLogs').textContent = '';
+        } else if (msg.type === 'error') {
+          logTerminal(`\n[ERROR] ${msg.data}\n`);
+        }
+      };
+      ws.onclose = () => {
+        document.getElementById('termStatus').textContent = 'DISCONNECTED';
+        document.getElementById('termStatus').style.color = 'var(--red)';
+        wsRetryTimer = setTimeout(connectWS, 4000);
+      };
+    }
+
+    function handleCommand(e) {
+      e.preventDefault();
+      const input = document.getElementById('cmdInput');
+      const val = input.value.trim();
+      if (!val) return;
+
+      logTerminal(`\nroot@colab:~# ${val}\n`);
+      if (val === 'clear') {
+        document.getElementById('terminalLogs').textContent = '';
+        input.value = '';
+        return;
+      }
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'exec',
+          command: val,
+          session: activeSession,
+          isBash: true
+        }));
+      } else {
+        // Fallback to REST
+        apiFetch('/api/exec', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: val, session: activeSession, isBash: true })
+        }).then(r => r.json()).then(res => {
+          if (res.stdout) logTerminal(res.stdout);
+          if (res.stderr) logTerminal(res.stderr);
+        });
+      }
+      input.value = '';
+    }
+
+    function sendQuick(cmd) {
+      document.getElementById('cmdInput').value = cmd;
+      document.getElementById('cmdInput').focus();
+    }
+
+    async function checkAuth() {
+      try {
+        const r = await apiFetch('/api/auth/status');
+        const d = await r.json();
+        const badge = document.getElementById('authStatusBadge');
+        const text = document.getElementById('authStatusText');
+        const dot = badge.querySelector('.dot');
+
+        if (d.has_token && (d.token_valid || d.authenticated)) {
+          badge.classList.remove('warning');
+          dot.className = 'dot';
+          text.textContent = 'AUTH OK';
+        } else {
+          dot.className = 'dot offline';
+          text.textContent = 'NOT AUTH';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function getAuthUrl() {
+      const r = await apiFetch('/api/auth/login-url');
+      const d = await r.json();
+      if (d.auth_url) {
+        const a = document.getElementById('authLink');
+        a.href = d.auth_url;
+        a.style.display = 'inline';
+        window.open(d.auth_url, '_blank');
+      } else {
+        alert('Error: ' + JSON.stringify(d));
+      }
+    }
+
+    async function submitAuthCode() {
+      const code = document.getElementById('authCodeInput').value.trim();
+      if (!code) return alert('Enter code');
+      const r = await apiFetch('/api/auth/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const d = await r.json();
+      alert(d.message || d.error || 'Code submitted');
+      checkAuth();
+    }
+
+    async function submitRawToken() {
+      const raw = document.getElementById('rawTokenInput').value.trim();
+      if (!raw) return alert('Enter JSON');
+      const r = await apiFetch('/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: raw
+      });
+      const d = await r.json();
+      alert(d.message || 'Token saved');
+      checkAuth();
+    }
+
+    async function disconnectAuth() {
+      if (!confirm('Revoke Colab credentials?')) return;
+      await apiFetch('/api/auth', { method: 'DELETE' });
+      checkAuth();
+    }
+
+    async function loadSessions() {
+      const cont = document.getElementById('sessionsListContainer');
+      cont.innerHTML = '<div>Querying sessions...</div>';
+      try {
+        const r = await apiFetch('/api/sessions');
+        const d = await r.json();
+        cont.innerHTML = '';
+        if (d.sessions && d.sessions.length > 0) {
+          d.sessions.forEach(s => {
+            const el = document.createElement('div');
+            el.className = 'card';
+            el.style.background = '#090d14';
+            el.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <strong style="color: var(--cyan);">${s.name}</strong>
+                  <span class="chip" style="margin-left: 8px;">${s.accelerator || 'CPU'}</span>
+                  <span style="color: #666; font-size: 11px; margin-left: 8px;">Shape: ${s.machine_shape || 'STANDARD'}</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  <button class="btn btn-cyan" onclick="selectSession('${s.name}')">[ USE ]</button>
+                  <button class="btn btn-danger" onclick="stopSession('${s.name}')">[ STOP ]</button>
+                </div>
+              </div>
+            `;
+            cont.appendChild(el);
+          });
+        } else {
+          cont.innerHTML = `
+            <div style="color: #666; padding: 12px 0;">
+              No sessions active. Create one above or use default.
+              <pre style="margin-top: 8px; color: #444; font-size: 11px;">${d.cliOutput || ''}</pre>
+            </div>
+          `;
+        }
+      } catch (e) {
+        cont.innerHTML = `<div style="color: var(--red);">Failed to load sessions: ${e.message}</div>`;
+      }
+    }
+
+    function selectSession(name) {
+      activeSession = name;
+      document.getElementById('currentSessionLabel').textContent = name;
+      document.getElementById('promptText').textContent = `colab@${name}:~#`;
+      if (ws) ws.close();
+    }
+
+    async function createSession() {
+      const name = document.getElementById('newSessName').value.trim();
+      const gpu = document.getElementById('newSessGpu').value;
+      const highMem = document.getElementById('newSessHighMem').checked;
+      logTerminal(`\n[colab] Allocating new session (${gpu})...\n`);
+
+      const r = await apiFetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, gpu, highMem })
+      });
+      const d = await r.json();
+      logTerminal(d.output || JSON.stringify(d));
+      loadSessions();
+    }
+
+    async function stopSession(name) {
+      if (!confirm(`Stop session ${name}?`)) return;
+      const r = await apiFetch(`/api/sessions/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      const d = await r.json();
+      logTerminal(`\n[colab] Stop session: ${d.output || 'Done'}\n`);
+      loadSessions();
+    }
+
+    async function fetchHardwareStats() {
+      const gpuCont = document.getElementById('gpuCardContent');
+      gpuCont.innerHTML = '<div>Querying GPU...</div>';
+      try {
+        const r = await apiFetch(`/api/gpu?session=${encodeURIComponent(activeSession)}`);
+        const d = await r.json();
+        if (d.hasGpu && d.gpus && d.gpus.length > 0) {
+          const g = d.gpus[0];
+          const pct = Math.round((g.memoryUsedMb / g.memoryTotalMb) * 100);
+          gpuCont.innerHTML = `
+            <div class="stat-row"><span class="stat-label">MODEL</span><span class="stat-val" style="color:var(--text);">${g.name}</span></div>
+            <div class="stat-row"><span class="stat-label">DRIVER</span><span class="stat-val">${g.driverVersion}</span></div>
+            <div class="stat-row"><span class="stat-label">TEMP</span><span class="stat-val">${g.temperatureC} °C</span></div>
+            <div class="stat-row"><span class="stat-label">GPU LOAD</span><span class="stat-val">${g.gpuUtilizationPercent} %</span></div>
+            <div class="stat-row"><span class="stat-label">VRAM</span><span class="stat-val">${g.memoryUsedMb} / ${g.memoryTotalMb} MB (${pct}%)</span></div>
+            <div class="meter-bar"><div class="meter-fill" style="width: ${pct}%;"></div></div>
+          `;
+        } else {
+          gpuCont.innerHTML = `<div style="color: #8892b0;">${d.message || 'No GPU active (CPU session)'}</div>`;
+        }
+      } catch (e) {
+        gpuCont.innerHTML = `<div style="color: var(--red);">GPU query failed</div>`;
+      }
+
+      try {
+        const rSys = await apiFetch(`/api/system?session=${encodeURIComponent(activeSession)}`);
+        const dSys = await rSys.json();
+        document.getElementById('systemSpecsRaw').textContent = dSys.raw || 'No system info';
+      } catch (e) {}
+    }
+
+    async function fetchFiles() {
+      const out = document.getElementById('filesOutput');
+      out.textContent = 'Listing files in /content...';
+      try {
+        const r = await apiFetch(`/api/files?session=${encodeURIComponent(activeSession)}&path=/content`);
+        const d = await r.json();
+        out.textContent = d.output || 'No files';
+      } catch (e) {
+        out.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    window.onload = () => {
+      checkAuth();
+      connectWS();
+    };
+  </script>
+</body>
+</html>
