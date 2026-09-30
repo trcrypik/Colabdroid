@@ -448,34 +448,34 @@ app.get('/api/usage', checkApiKey, async (req, res) => {
 app.get('/api/files', checkApiKey, async (req, res) => {
   const session = req.query.session;
   const remotePath = req.query.path || '/content';
-  const listPy =
-    'import os,json,stat\\n' +
-    'p=' + JSON.stringify(remotePath) + '\\n' +
-    'out=[]\\n' +
-    'try:\\n' +
-    '  for n in sorted(os.listdir(p)):\\n' +
-    '    fp=os.path.join(p,n)\\n' +
-    '    try:\\n' +
-    '      st=os.stat(fp); out.append({"name":n,"path":fp,"is_dir":stat.S_ISDIR(st.st_mode),"size":st.st_size,"mtime":int(st.st_mtime)})\\n' +
-    '    except Exception as e:\\n' +
-    '      out.append({"name":n,"path":fp,"error":str(e)})\\n' +
-    '  print(json.dumps({"ok":True,"path":p,"entries":out}))\\n' +
-    'except Exception as e:\\n' +
-    '  print(json.dumps({"ok":False,"path":p,"error":str(e),"entries":[]}))\\n';
+  const listPy = [
+    'import os, json, stat',
+    'p = ' + JSON.stringify(remotePath),
+    'out = []',
+    'try:',
+    '    for n in sorted(os.listdir(p)):',
+    '        fp = os.path.join(p, n)',
+    '        try:',
+    '            st = os.stat(fp)',
+    '            out.append({"name": n, "path": fp, "is_dir": stat.S_ISDIR(st.st_mode), "size": st.st_size, "mtime": int(st.st_mtime)})',
+    '        except Exception as e:',
+    '            out.append({"name": n, "path": fp, "error": str(e)})',
+    '    print(json.dumps({"ok": True, "path": p, "entries": out}))',
+    'except Exception as e:',
+    '    print(json.dumps({"ok": False, "path": p, "error": str(e), "entries": []}))',
+  ].join('\n');
   const args = ['exec'];
   if (session) args.push('-s', session);
   const result = await runCommand('colab', args, listPy, 30000);
   const raw = (result.stdout || result.stderr || '').trim();
-  // last JSON line
   let parsed = null;
-  const lines = raw.split('\\n').map(l => l.trim()).filter(Boolean);
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i--) {
     try { parsed = JSON.parse(lines[i]); break; } catch (e) {}
   }
   if (parsed) {
     return res.json({ success: !!parsed.ok, path: parsed.path || remotePath, entries: parsed.entries || [], error: parsed.error, raw });
   }
-  // fallback plain ls
   const lsArgs = ['ls'];
   if (session) lsArgs.push('-s', session);
   lsArgs.push(remotePath);
@@ -812,41 +812,57 @@ app.post('/api/drivemount', checkApiKey, async (req, res) => {
   });
 });
 
-app.get('/api/notebooks'
-, checkApiKey, async (req, res) => {
+
+app.get('/api/notebooks', checkApiKey, async (req, res) => {
   const session = req.query.session;
   const root = req.query.path || '/content/drive/MyDrive/Colab Notebooks';
-  const listPy =
-    'import os,json\\n' +
-    'root=' + JSON.stringify(root) + '\\n' +
-    'found=[]\\n' +
-    'def walk(d, depth=0):\\n' +
-    '  if depth>3: return\\n' +
-    '  try: names=sorted(os.listdir(d))\\n' +
-    '  except Exception: return\\n' +
-    '  for n in names:\\n' +
-    '    fp=os.path.join(d,n)\\n' +
-    '    if n.endswith(".ipynb") and os.path.isfile(fp):\\n' +
-    '      try: found.append({"name":n,"path":fp,"size":os.path.getsize(fp)})\\n' +
-    '      except Exception: found.append({"name":n,"path":fp})\\n' +
-    '    elif os.path.isdir(fp) and not n.startswith("."):\\n' +
-    '      walk(fp, depth+1)\\n' +
-    'if not os.path.isdir(root):\\n' +
-    '  print(json.dumps({"ok":False,"error":"path not found: "+root,"root":root,"notebooks":[]}))\\n' +
-    'else:\\n' +
-    '  walk(root)\\n' +
-    '  print(json.dumps({"ok":True,"root":root,"notebooks":found,"count":len(found)}))\\n';
+  const listPy = [
+    'import os, json',
+    'root = ' + JSON.stringify(root),
+    'found = []',
+    'def walk(d, depth=0):',
+    '    if depth > 3:',
+    '        return',
+    '    try:',
+    '        names = sorted(os.listdir(d))',
+    '    except Exception:',
+    '        return',
+    '    for n in names:',
+    '        fp = os.path.join(d, n)',
+    '        try:',
+    '            if n.endswith(".ipynb") and os.path.isfile(fp):',
+    '                try:',
+    '                    found.append({"name": n, "path": fp, "size": os.path.getsize(fp)})',
+    '                except Exception:',
+    '                    found.append({"name": n, "path": fp})',
+    '            elif os.path.isdir(fp) and not n.startswith("."):',
+    '                walk(fp, depth + 1)',
+    '        except Exception:',
+    '            pass',
+    'if not os.path.isdir(root):',
+    '    print(json.dumps({"ok": False, "error": "path not found: " + root, "root": root, "notebooks": []}))',
+    'else:',
+    '    walk(root)',
+    '    print(json.dumps({"ok": True, "root": root, "notebooks": found, "count": len(found)}))',
+  ].join('\n');
+
   const args = ['exec'];
   if (session) args.push('-s', session);
-  const result = await runCommand('colab', args, listPy, 60000);
+  const result = await runCommand('colab', args, listPy, 90000);
   const raw = (result.stdout || result.stderr || '').trim();
   let parsed = null;
-  const lines = raw.split('\\n').map(l => l.trim()).filter(Boolean);
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i--) {
     try { parsed = JSON.parse(lines[i]); break; } catch (e) {}
   }
   if (parsed) return res.json({ success: !!parsed.ok, ...parsed, raw });
-  res.json({ success: false, notebooks: [], error: raw || 'parse failed', root });
+  res.json({
+    success: false,
+    notebooks: [],
+    error: raw || 'parse failed',
+    root,
+    hint: result.success ? undefined : 'exec failed — is Drive mounted and session alive?'
+  });
 });
 
 app.post('/api/notebooks/run', checkApiKey, async (req, res) => {
@@ -856,66 +872,48 @@ app.post('/api/notebooks/run', checkApiKey, async (req, res) => {
     return res.status(400).json({ error: 'only .ipynb supported' });
   }
   const timeoutMs = (timeout || 600) * 1000;
-  // Prefer colab exec -f; if CLI needs remote path only, exec runs it on VM
-  const args = ['exec', '-f', nbPath];
-  if (session) {
-    // CLI: colab exec -s NAME -f file — file may need to exist locally OR on remote
-    // Official CLI: -f reads local file. For remote notebook use python exec:
-    args.length = 0;
-    args.push('exec');
-    args.push('-s', session);
-  }
-  let stdinCode = null;
-  if (session) {
-    // Execute notebook on VM via nbclient/jupyter if available, else run as JSON cells roughly via papermill-less approach
-    stdinCode =
-      'import json,sys,subprocess,os\\n' +
-      'p=' + JSON.stringify(nbPath) + '\\n' +
-      'print("Running notebook:", p)\\n' +
-      'if not os.path.isfile(p):\\n' +
-      '  raise SystemExit("Notebook not found: "+p)\\n' +
-      '# Try jupyter/nbconvert execute\\n' +
-      'cmds=[\\n' +
-      '  ["jupyter","nbconvert","--to","notebook","--execute","--inplace",p],\\n' +
-      '  ["python","-m","jupyter","nbconvert","--to","notebook","--execute","--inplace",p],\\n' +
-      ']\\n' +
-      'ok=False\\n' +
-      'for c in cmds:\\n' +
-      '  try:\\n' +
-      '    r=subprocess.run(c,capture_output=True,text=True,timeout=' + str(int((timeout || 600))) + ')\\n' +
-      '    print(r.stdout)\\n' +
-      '    print(r.stderr)\\n' +
-      '    if r.returncode==0:\\n' +
-      '      ok=True; break\\n' +
-      '  except Exception as e:\\n' +
-      '    print("try failed", c, e)\\n' +
-      'if not ok:\\n' +
-      '  # Fallback: run code cells sequentially\\n' +
-      '  nb=json.load(open(p))\\n' +
-      '  g={}\\n' +
-      '  for i,cell in enumerate(nb.get("cells",[])):\\n' +
-      '    if cell.get("cell_type")!="code": continue\\n' +
-      '    src="".join(cell.get("source") or [])\\n' +
-      '    print(f"\\n# --- cell {i} ---")\\n' +
-      '    try:\\n' +
-      '      exec(compile(src, f"cell_{i}", "exec"), g, g)\\n' +
-      '    except Exception as e:\\n' +
-      '      print("CELL ERROR:", e)\\n' +
-      '      raise\\n' +
-      '  print("\\nNotebook finished (fallback cell exec)")\\n';
-    const result = await runCommand('colab', args, stdinCode, timeoutMs);
-    return res.json({
-      success: result.success,
-      path: nbPath,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      timedOut: result.timedOut,
-      durationMs: result.durationMs
-    });
-  }
-  // no session: try local -f
-  const localArgs = ['exec', '-f', nbPath];
-  const result = await runCommand('colab', localArgs, null, timeoutMs);
+  const args = ['exec'];
+  if (session) args.push('-s', session);
+
+  const stdinCode = [
+    'import json, subprocess, os, sys',
+    'p = ' + JSON.stringify(nbPath),
+    'print("Running notebook:", p, flush=True)',
+    'if not os.path.isfile(p):',
+    '    raise SystemExit("Notebook not found: " + p)',
+    'ok = False',
+    'for c in [',
+    '    ["jupyter", "nbconvert", "--to", "notebook", "--execute", "--inplace", p],',
+    '    ["python", "-m", "jupyter", "nbconvert", "--to", "notebook", "--execute", "--inplace", p],',
+    ']:',
+    '    try:',
+    '        r = subprocess.run(c, capture_output=True, text=True, timeout=' + String(Math.max(60, parseInt(timeout, 10) || 600)) + ')',
+    '        print(r.stdout or "", end="")',
+    '        print(r.stderr or "", end="")',
+    '        if r.returncode == 0:',
+    '            ok = True',
+    '            break',
+    '    except Exception as e:',
+    '        print("try failed", c, e, flush=True)',
+    'if not ok:',
+    '    nb = json.load(open(p))',
+    '    g = {}',
+    '    for i, cell in enumerate(nb.get("cells", [])):',
+    '        if cell.get("cell_type") != "code":',
+    '            continue',
+    '        src = "".join(cell.get("source") or [])',
+    '        print("\\n# --- cell %d ---" % i, flush=True)',
+    '        try:',
+    '            exec(compile(src, "cell_%d" % i, "exec"), g, g)',
+    '        except Exception as e:',
+    '            print("CELL ERROR:", e, flush=True)',
+    '            raise',
+    '    print("\\nNotebook finished (fallback cell exec)", flush=True)',
+    'else:',
+    '    print("Notebook finished (nbconvert)", flush=True)',
+  ].join('\n');
+
+  const result = await runCommand('colab', args, stdinCode, timeoutMs);
   res.json({
     success: result.success,
     path: nbPath,
