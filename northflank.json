@@ -1,0 +1,35 @@
+{
+  "name": "colab-northflank-backend",
+  "description": "Google Colab CLI Backend Service on Northflank",
+  "billing": {
+    "deploymentPlan": "starter"
+  },
+  "deployment": {
+    "instances": 1
+  },
+  "ports": [
+    {
+      "name": "http-ws",
+      "internalPort": 8080,
+      "public": true,
+      "protocol": "HTTP"
+    }
+  ],
+  "healthCheck": {
+    "path": "/health",
+    "port": 8080
+  },
+  "runtimeEnvironment": {
+    "PORT": "8080",
+    "REQUIRE_API_KEY": "1",
+    "COLAB_HOME": "/data",
+    "HOME": "/data"
+  },
+  "volumes": [
+    {
+      "name": "colab-cli-data",
+      "mountPath": "/data",
+      "accessMode": "ReadWriteOnce"
+    }
+  ]
+}
