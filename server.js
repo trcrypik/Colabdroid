@@ -69,8 +69,8 @@ const driveMountJobs = new Map();
 function pruneDriveJobs() {
   const now = Date.now();
   for (const [id, job] of driveMountJobs.entries()) {
-    if (now - job.started > 15 * 60 * 1000) {
-      try { if (job.proc && !job.proc.killed) job.proc.kill('SIGKILL'); } catch (e) {}
+    if (now - job.started > 20 * 60 * 1000) {
+      try { if (job.kill) job.kill(); else if (job.proc && !job.proc.killed) job.proc.kill('SIGKILL'); } catch (e) {}
       driveMountJobs.delete(id);
     }
   }
@@ -562,33 +562,82 @@ app.post('/api/drivemount/start', checkApiKey, async (req, res) => {
   pruneDriveJobs();
   // kill previous job for same session
   for (const [id, job] of driveMountJobs.entries()) {
-    if (job.session === session && job.status === 'waiting_auth') {
-      try { job.proc.kill('SIGKILL'); } catch (e) {}
+    if (job.session === session && (job.status === 'waiting_auth' || job.status === 'starting' || job.status === 'confirming')) {
+      try { if (job.kill) job.kill(); else if (job.proc) job.proc.kill('SIGKILL'); } catch (e) {}
       driveMountJobs.delete(id);
     }
   }
 
-  const args = ['drivemount'];
-  args.push('-s', session);
+  // Patch kernel default timeout to 10 minutes, then run interactive drivemount.
+  // Default drive.mount timeout is 120s — too short for mobile browser OAuth.
+  const patchPy =
+    'import google.colab.drive as _drv\n' +
+    '_orig = _drv.mount\n' +
+    'def _mount(mountpoint, force_remount=False, timeout_ms=600000, readonly=False):\n' +
+    '  print("[colab-backend] mount timeout_ms", timeout_ms, flush=True)\n' +
+    '  return _orig(mountpoint, force_remount=force_remount, timeout_ms=timeout_ms, readonly=readonly)\n' +
+    '_drv.mount = _mount\n' +
+    'print("[colab-backend] drive.mount patched timeout_ms=600000", flush=True)\n';
+  try {
+    await runCommand('colab', ['exec', '-s', session], patchPy, 60000);
+  } catch (e) {
+    console.warn('[drivemount] patch failed', e.message);
+  }
+
+  const args = ['drivemount', '-s', session];
   if (mountPath) args.push(mountPath);
 
   const jobId = 'dm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-  const proc = spawn('colab', args, {
-    env: { ...process.env, PYTHONUNBUFFERED: '1', HOME: process.env.HOME }
-  });
+
+  // Prefer node-pty so "Press Enter" sees a real TTY
+  let usePty = Boolean(pty);
+  let proc = null;
+  let term = null;
+  if (usePty) {
+    term = pty.spawn('colab', args, {
+      name: 'xterm-256color',
+      cols: 200,
+      rows: 40,
+      cwd: process.env.HOME || os.homedir(),
+      env: {
+        ...process.env,
+        PYTHONUNBUFFERED: '1',
+        TERM: 'xterm-256color',
+        HOME: process.env.HOME || os.homedir()
+      }
+    });
+  } else {
+    proc = spawn('colab', args, {
+      env: { ...process.env, PYTHONUNBUFFERED: '1', HOME: process.env.HOME }
+    });
+  }
 
   const job = {
     id: jobId,
     session,
     mountPath,
     proc,
+    term,
+    usePty,
     stdout: '',
     stderr: '',
     authUrls: [],
-    status: 'starting', // starting | waiting_auth | confirming | done | error
+    status: 'starting',
     started: Date.now(),
     exitCode: null,
-    error: null
+    error: null,
+    writeStdin(data) {
+      try {
+        if (job.usePty && job.term) job.term.write(data);
+        else if (job.proc && job.proc.stdin && !job.proc.stdin.destroyed) job.proc.stdin.write(data);
+      } catch (e) {}
+    },
+    kill() {
+      try {
+        if (job.usePty && job.term) job.term.kill();
+        else if (job.proc) job.proc.kill('SIGKILL');
+      } catch (e) {}
+    }
   };
   driveMountJobs.set(jobId, job);
 
@@ -600,24 +649,35 @@ app.post('/api/drivemount/start', checkApiKey, async (req, res) => {
     }
   };
 
-  const onChunk = (s, which) => {
-    if (which === 'out') job.stdout += s; else job.stderr += s;
+  const onChunk = (s) => {
+    job.stdout += s;
     refreshAuthUrls();
   };
 
-  proc.stdout.on('data', (d) => onChunk(d.toString(), 'out'));
-  proc.stderr.on('data', (d) => onChunk(d.toString(), 'err'));
-  proc.on('close', (code) => {
-    job.exitCode = code;
-    if (job.status !== 'done') {
-      job.status = code === 0 ? 'done' : 'error';
-      if (code !== 0) job.error = 'process exited with code ' + code;
-    }
-  });
-  proc.on('error', (err) => {
-    job.status = 'error';
-    job.error = err.message;
-  });
+  if (usePty) {
+    term.onData((d) => onChunk(d));
+    term.onExit(({ exitCode }) => {
+      job.exitCode = exitCode;
+      if (job.status !== 'done') {
+        job.status = exitCode === 0 ? 'done' : 'error';
+        if (exitCode !== 0) job.error = 'process exited with code ' + exitCode;
+      }
+    });
+  } else {
+    proc.stdout.on('data', (d) => onChunk(d.toString()));
+    proc.stderr.on('data', (d) => onChunk(d.toString()));
+    proc.on('close', (code) => {
+      job.exitCode = code;
+      if (job.status !== 'done') {
+        job.status = code === 0 ? 'done' : 'error';
+        if (code !== 0) job.error = 'process exited with code ' + code;
+      }
+    });
+    proc.on('error', (err) => {
+      job.status = 'error';
+      job.error = err.message;
+    });
+  }
 
   // Wait up to 150s for a *full* OAuth URL (ignore truncated "..." log lines)
   const waitUntil = Date.now() + 150000;
@@ -674,47 +734,59 @@ app.post('/api/drivemount/confirm', checkApiKey, async (req, res) => {
   }
 
   job.status = 'confirming';
-  // Send Enter only after user confirms browser auth
+  // Send Enter only after user confirms browser auth (drive.mount input())
+  const pokeEnter = () => {
+    try {
+      if (job.writeStdin) job.writeStdin('\r');
+      if (job.writeStdin) job.writeStdin('\n');
+      else if (job.proc && job.proc.stdin && !job.proc.stdin.destroyed) job.proc.stdin.write('\n');
+    } catch (e) {}
+  };
   try {
-    if (job.proc.stdin && !job.proc.stdin.destroyed) {
-      job.proc.stdin.write('\n');
-      setTimeout(() => {
-        try { job.proc.stdin.write('\n'); } catch (e) {}
-      }, 500);
-    }
+    pokeEnter();
+    setTimeout(pokeEnter, 300);
+    setTimeout(pokeEnter, 1500);
+    setTimeout(pokeEnter, 4000);
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });
   }
 
-  // Wait for process to finish (mount success or fail)
-  const waitUntil = Date.now() + 120000;
+  // Wait up to 3 min for mount to finish after Enter
+  const waitUntil = Date.now() + 180000;
   while (Date.now() < waitUntil) {
     if (job.exitCode !== null) break;
+    if (/MOUNT_OK|Mounted at/i.test(job.stdout + job.stderr)) break;
     await new Promise((r) => setTimeout(r, 300));
   }
 
-  if (job.exitCode === null) {
+  // If still running but MOUNT_OK seen, success
+  const output = (job.stdout + '\n' + job.stderr).trim();
+  const mounted = /MOUNT_OK|Mounted at|\/content\/drive/i.test(output) && !/ValueError.*mount failed/i.test(output);
+
+  if (job.exitCode === null && !mounted) {
     return res.json({
       success: false,
       status: 'confirming',
-      output: (job.stdout + '\n' + job.stderr).trim(),
-      error: 'Still waiting for mount to finish — try CONFIRM again or check PTY'
+      jobId,
+      output,
+      error: 'Still waiting — finish browser Allow, then CONFIRM again. Job kept alive.'
     });
   }
 
-  const ok = job.exitCode === 0;
-  job.status = ok ? 'done' : 'error';
-  const output = (job.stdout + '\n' + job.stderr).trim();
-  // keep job briefly for status, then drop
-  setTimeout(() => driveMountJobs.delete(jobId), 60000);
+  const ok = job.exitCode === 0 || mounted;
+  if (job.exitCode !== null) {
+    job.status = ok ? 'done' : 'error';
+    setTimeout(() => driveMountJobs.delete(jobId), 120000);
+  }
 
   res.json({
     success: ok,
     status: job.status,
+    jobId,
     exitCode: job.exitCode,
     mountPath: job.mountPath,
     output,
-    error: ok ? null : 'mount failed — authorize in browser first, then CONFIRM only once'
+    error: ok ? null : 'mount failed — complete Google Allow (wait for "you may close this"), return quickly, CONFIRM within 10 min of START'
   });
 });
 

@@ -270,7 +270,7 @@
           <button class="btn" id="btnMountConfirm" type="button" onclick="mountDriveConfirm()" disabled>[2_CONFIRM_MOUNT]</button>
           <button class="btn" type="button" onclick="scanNotebooks()">[SCAN]</button>
         </div>
-        <p class="hint">Drive auth needs a browser once. Flow: START → open Google link → Allow → CONFIRM. No fully browserless option for personal Drive on Colab.</p>
+        <p class="hint">Flow: START → OPEN link → Allow → wait “you may close this” → immediately CONFIRM (within ~10 min). Job is saved if you leave the tab. Timeout extended to 10 min.</p>
         <div id="nbActionLog" class="log-box">—</div>
         <div id="nbList"></div>
       </div>
@@ -477,7 +477,7 @@
       if (name === 'sessions') loadSessions();
       if (name === 'hardware') fetchHardwareStats();
       if (name === 'files') fmList();
-      if (name === 'notebooks') { /* keep */ }
+      if (name === 'notebooks') { restoreDriveJob(); }
       if (name === 'auth') { loadConnectionCfgIntoForm(); checkAuth(); }
       if (name === 'terminal' && termMode === 'pty') {
         setTimeout(() => { try { fitAddon && fitAddon.fit(); sendResize(); } catch (e) {} }, 50);
@@ -896,7 +896,39 @@
       loadSessions();
     }
 
-    let driveMountJobId = null;
+    let driveMountJobId = localStorage.getItem('colab_drive_job') || null;
+
+    function saveDriveJob(id) {
+      driveMountJobId = id || null;
+      if (id) localStorage.setItem('colab_drive_job', id);
+      else localStorage.removeItem('colab_drive_job');
+    }
+
+    async function restoreDriveJob() {
+      const id = localStorage.getItem('colab_drive_job');
+      if (!id) return;
+      driveMountJobId = id;
+      const btn2 = document.getElementById('btnMountConfirm');
+      const log = document.getElementById('nbActionLog');
+      try {
+        const r = await apiFetch('/api/drivemount/status?jobId=' + encodeURIComponent(id));
+        if (!r.ok) {
+          saveDriveJob(null);
+          if (btn2) btn2.disabled = true;
+          return;
+        }
+        const d = await r.json();
+        const urls = filterAuthUrls(d.authUrls || []);
+        if (btn2) btn2.disabled = !(d.status === 'waiting_auth' || d.status === 'confirming' || d.status === 'starting');
+        if (log) {
+          renderMountLog(log, { jobId: id, hint: 'Restored job after return from browser. If you already Allowed — press CONFIRM now.', output: d.output }, urls);
+        }
+      } catch (e) {
+        /* keep id, allow confirm attempt */
+        if (btn2) btn2.disabled = false;
+      }
+    }
+
 
     async function mountDriveStart() {
       const log = document.getElementById('nbActionLog');
@@ -924,7 +956,7 @@
           log.textContent = (d.error || 'Start failed') + '\n\n' + (d.output || '');
           return;
         }
-        driveMountJobId = d.jobId;
+        saveDriveJob(d.jobId);
         let urls = filterAuthUrls(d.authUrls || []);
         // Poll status a few times if URL not ready
         if (!urls.length && d.jobId) {
@@ -1031,7 +1063,7 @@
       btn2.disabled = true;
       log.className = 'log-box';
       const note = document.createElement('div');
-      note.textContent = 'Sending Enter to Colab after your browser auth…\n';
+      note.textContent = 'Sending Enter to Colab… (finish Allow first, then this within 10 min of START)\n';
       log.appendChild(note);
       try {
         const r = await apiFetch('/api/drivemount/confirm', {
@@ -1045,7 +1077,7 @@
           (d.success ? 'DRIVE MOUNTED\n' : 'MOUNT FAILED\n') +
           (d.error ? d.error + '\n\n' : '') +
           (d.output || JSON.stringify(d, null, 2));
-        if (d.success) driveMountJobId = null;
+        if (d.success) saveDriveJob(null);
         else btn2.disabled = false;
       } catch (e) {
         log.className = 'log-box err';
@@ -1298,6 +1330,7 @@
     loadConnectionCfgIntoForm();
     setTermMode(termMode);
     checkAuth();
+    restoreDriveJob();
   </script>
 </body>
 </html>
