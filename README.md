@@ -1,6 +1,6 @@
 # Google Colab CLI — Northflank Backend
 
-Node.js API + Web UI that drives [google-colab-cli](https://github.com/googlecolab/google-colab-cli) for the **Colab Hacker Terminal** Android app.
+Node.js API + Web UI that drives [google-colab-cli](https://github.com/googlecolab/google-colab-cli) for the **Colab Terminal** Android app.
 
 ## Important: terminal mode
 
