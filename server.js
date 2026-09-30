@@ -64,6 +64,20 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const upload = multer({ dest: '/tmp/colab_uploads/' });
 
+// In-flight interactive Drive mounts (waiting for browser OAuth + user confirm)
+const driveMountJobs = new Map();
+function pruneDriveJobs() {
+  const now = Date.now();
+  for (const [id, job] of driveMountJobs.entries()) {
+    if (now - job.started > 15 * 60 * 1000) {
+      try { if (job.proc && !job.proc.killed) job.proc.kill('SIGKILL'); } catch (e) {}
+      driveMountJobs.delete(id);
+    }
+  }
+}
+setInterval(pruneDriveJobs, 60000);
+
+
 function parseCookies(req) {
   const out = {};
   const raw = req.headers.cookie;
@@ -501,104 +515,202 @@ app.post('/api/files/upload', checkApiKey, upload.single('file'), async (req, re
   res.json({ success: result.success, remotePath, output: result.stdout || result.stderr });
 });
 
-app.post('/api/drivemount', checkApiKey, async (req, res) => {
+// --- Google Drive mount (2-step: start → user auth in browser → confirm) ---
+// Colab drive.mount is inherently interactive; there is no fully browserless
+// consumer-account path. We never auto-send Enter before the user confirms.
+
+app.post('/api/drivemount/start', checkApiKey, async (req, res) => {
   const session = req.body.session;
   const mountPath = req.body.path || '/content/drive';
-  const args = ['drivemount'];
-  if (session) args.push('-s', session);
-  if (mountPath) args.push(mountPath);
-  console.log('[COLAB-BACKEND] drivemount (auto-Enter after OAuth prompt)', args.join(' '));
+  if (!session) return res.status(400).json({ error: 'session required' });
 
-  // CLI prints Google auth URL then waits for user to press Enter — no TTY in API mode.
-  // We capture output, extract URL, and send newlines so mount can finish after browser auth.
-  const started = Date.now();
+  pruneDriveJobs();
+  // kill previous job for same session
+  for (const [id, job] of driveMountJobs.entries()) {
+    if (job.session === session && job.status === 'waiting_auth') {
+      try { job.proc.kill('SIGKILL'); } catch (e) {}
+      driveMountJobs.delete(id);
+    }
+  }
+
+  const args = ['drivemount'];
+  args.push('-s', session);
+  if (mountPath) args.push(mountPath);
+
+  const jobId = 'dm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
   const proc = spawn('colab', args, {
     env: { ...process.env, PYTHONUNBUFFERED: '1', HOME: process.env.HOME }
   });
-  let stdout = '';
-  let stderr = '';
-  let enterCount = 0;
-  const urlRe = /https?:\/\/[^\s]+/g;
-  let foundUrls = [];
-  let urlSeen = false;
-  let enterTimer = null;
-  let firstEnter = null;
 
-  const sendEnter = () => {
-    if (!proc.stdin || proc.stdin.destroyed) return;
-    try {
-      proc.stdin.write('\n');
-      enterCount++;
-      console.log('[drivemount] sent Enter #' + enterCount);
-    } catch (e) {}
+  const job = {
+    id: jobId,
+    session,
+    mountPath,
+    proc,
+    stdout: '',
+    stderr: '',
+    authUrls: [],
+    status: 'starting', // starting | waiting_auth | confirming | done | error
+    started: Date.now(),
+    exitCode: null,
+    error: null
+  };
+  driveMountJobs.set(jobId, job);
+
+  const urlRe = /https?:\/\/[^\s"'<>]+/g;
+  const onChunk = (s, which) => {
+    if (which === 'out') job.stdout += s; else job.stderr += s;
+    const m = s.match(urlRe);
+    if (m) {
+      for (const u of m) {
+        if (!job.authUrls.includes(u) && /oauth|accounts\.google|authorize/i.test(u)) {
+          job.authUrls.push(u);
+        } else if (!job.authUrls.includes(u) && /http/i.test(u) && job.authUrls.length === 0) {
+          job.authUrls.push(u);
+        }
+      }
+      if (job.authUrls.length && job.status === 'starting') {
+        job.status = 'waiting_auth';
+      }
+    }
+    if (/Press Enter after/i.test(s) && job.status === 'starting') {
+      job.status = 'waiting_auth';
+    }
   };
 
-  const armAutoEnter = () => {
-    if (urlSeen) return;
-    urlSeen = true;
-    // Give user time to open URL and click Allow, then send Enter repeatedly
-    firstEnter = setTimeout(() => {
-      sendEnter();
-      enterTimer = setInterval(sendEnter, 6000);
-    }, 12000);
-  };
-
-  proc.stdout.on('data', (d) => {
-    const s = d.toString();
-    stdout += s;
-    const m = s.match(urlRe);
-    if (m) { foundUrls = foundUrls.concat(m); armAutoEnter(); }
-    // also arm if CLI asks to press enter even without matching earlier
-    if (/press\s+enter/i.test(s) || /after\s+authorization/i.test(s)) armAutoEnter();
-  });
-  proc.stderr.on('data', (d) => {
-    const s = d.toString();
-    stderr += s;
-    const m = s.match(urlRe);
-    if (m) { foundUrls = foundUrls.concat(m); armAutoEnter(); }
-    if (/press\s+enter/i.test(s) || /after\s+authorization/i.test(s)) armAutoEnter();
-  });
-
-  // Fallback: if no URL detected, still try Enter after 25s (some CLIs buffer output)
-  const fallbackEnter = setTimeout(() => { armAutoEnter(); }, 25000);
-
-  const timeoutMs = 180000;
-  const killer = setTimeout(() => {
-    try { proc.kill('SIGKILL'); } catch (e) {}
-  }, timeoutMs);
-
+  proc.stdout.on('data', (d) => onChunk(d.toString(), 'out'));
+  proc.stderr.on('data', (d) => onChunk(d.toString(), 'err'));
   proc.on('close', (code) => {
-    if (enterTimer) clearInterval(enterTimer);
-    if (firstEnter) clearTimeout(firstEnter);
-    clearTimeout(fallbackEnter);
-    clearTimeout(killer);
-    try { proc.stdin && proc.stdin.end(); } catch (e) {}
-    const output = (stdout || '') + (stderr ? '\n' + stderr : '');
-    // unique urls
-    const urls = [...new Set(foundUrls)];
-    res.json({
-      success: code === 0,
-      mountPath,
-      output,
-      authUrls: urls,
-      entersSent: enterCount,
-      exitCode: code,
-      durationMs: Date.now() - started,
-      hint: urls.length
-        ? 'Open auth URL in browser, confirm access. Server auto-sends Enter while waiting.'
-        : 'If stuck: open PTY terminal and run: colab drivemount -s SESSION, then press [ENTER] after browser auth.'
-    });
+    job.exitCode = code;
+    if (job.status !== 'done') {
+      job.status = code === 0 ? 'done' : 'error';
+      if (code !== 0) job.error = 'process exited with code ' + code;
+    }
+  });
+  proc.on('error', (err) => {
+    job.status = 'error';
+    job.error = err.message;
   });
 
-  proc.on('error', (err) => {
-    clearInterval(enterTimer);
-    clearTimeout(firstEnter);
-    clearTimeout(killer);
-    res.status(500).json({ success: false, error: err.message, output: stdout + stderr });
+  // Wait up to 120s for auth URL (Colab can be slow to print it)
+  const waitUntil = Date.now() + 120000;
+  while (Date.now() < waitUntil) {
+    if (job.authUrls.length || job.status === 'waiting_auth') break;
+    if (job.status === 'error' || job.exitCode !== null) break;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+
+  if (job.exitCode !== null && !job.authUrls.length) {
+    driveMountJobs.delete(jobId);
+    return res.json({
+      success: false,
+      status: 'error',
+      output: (job.stdout + '\n' + job.stderr).trim(),
+      error: job.error || 'drivemount exited before auth URL appeared'
+    });
+  }
+
+  res.json({
+    success: true,
+    jobId,
+    status: job.status,
+    authUrls: job.authUrls,
+    mountPath,
+    output: (job.stdout + '\n' + job.stderr).trim(),
+    hint: '1) Open the auth URL and grant access. 2) Return here and press CONFIRM_MOUNT. Do not skip step 1.'
   });
 });
 
-app.get('/api/notebooks', checkApiKey, async (req, res) => {
+app.post('/api/drivemount/confirm', checkApiKey, async (req, res) => {
+  const { jobId } = req.body || {};
+  const job = driveMountJobs.get(jobId);
+  if (!job) return res.status(404).json({ error: 'job not found or expired — call /api/drivemount/start again' });
+  if (job.status === 'done') {
+    return res.json({
+      success: job.exitCode === 0,
+      status: 'done',
+      output: (job.stdout + '\n' + job.stderr).trim(),
+      exitCode: job.exitCode
+    });
+  }
+  if (job.status === 'error') {
+    return res.json({
+      success: false,
+      status: 'error',
+      error: job.error,
+      output: (job.stdout + '\n' + job.stderr).trim()
+    });
+  }
+
+  job.status = 'confirming';
+  // Send Enter only after user confirms browser auth
+  try {
+    if (job.proc.stdin && !job.proc.stdin.destroyed) {
+      job.proc.stdin.write('\n');
+      setTimeout(() => {
+        try { job.proc.stdin.write('\n'); } catch (e) {}
+      }, 500);
+    }
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+
+  // Wait for process to finish (mount success or fail)
+  const waitUntil = Date.now() + 120000;
+  while (Date.now() < waitUntil) {
+    if (job.exitCode !== null) break;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
+  if (job.exitCode === null) {
+    return res.json({
+      success: false,
+      status: 'confirming',
+      output: (job.stdout + '\n' + job.stderr).trim(),
+      error: 'Still waiting for mount to finish — try CONFIRM again or check PTY'
+    });
+  }
+
+  const ok = job.exitCode === 0;
+  job.status = ok ? 'done' : 'error';
+  const output = (job.stdout + '\n' + job.stderr).trim();
+  // keep job briefly for status, then drop
+  setTimeout(() => driveMountJobs.delete(jobId), 60000);
+
+  res.json({
+    success: ok,
+    status: job.status,
+    exitCode: job.exitCode,
+    mountPath: job.mountPath,
+    output,
+    error: ok ? null : 'mount failed — authorize in browser first, then CONFIRM only once'
+  });
+});
+
+app.get('/api/drivemount/status', checkApiKey, (req, res) => {
+  const job = driveMountJobs.get(req.query.jobId);
+  if (!job) return res.status(404).json({ error: 'job not found' });
+  res.json({
+    jobId: job.id,
+    status: job.status,
+    authUrls: job.authUrls,
+    exitCode: job.exitCode,
+    output: (job.stdout + '\n' + job.stderr).trim().slice(-4000),
+    error: job.error
+  });
+});
+
+// Legacy single-call endpoint → redirect clients to 2-step
+app.post('/api/drivemount', checkApiKey, async (req, res) => {
+  res.status(400).json({
+    success: false,
+    error: 'Use 2-step flow: POST /api/drivemount/start then POST /api/drivemount/confirm after browser auth',
+    endpoints: ['/api/drivemount/start', '/api/drivemount/confirm', '/api/drivemount/status']
+  });
+});
+
+app.get('/api/notebooks'
+, checkApiKey, async (req, res) => {
   const session = req.query.session;
   const root = req.query.path || '/content/drive/MyDrive/Colab Notebooks';
   const listPy =
