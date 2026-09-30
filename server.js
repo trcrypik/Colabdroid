@@ -2,26 +2,38 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
-const { spawn, exec } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const multer = require('multer');
+const url = require('url');
+
+let pty = null;
+try {
+  pty = require('node-pty');
+  console.log('[COLAB-BACKEND] node-pty loaded — real PTY available');
+} catch (e) {
+  console.warn('[COLAB-BACKEND] node-pty not available, /pty will fail until rebuilt:', e.message);
+}
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, path: '/terminal' });
+
+// Two logical WS endpoints on one HTTP server via noServer + upgrade routing
+const wssExec = new WebSocket.Server({ noServer: true });
+const wssPty = new WebSocket.Server({ noServer: true });
 
 const PORT = process.env.PORT || 8080;
-// Production default: API key required. Set REQUIRE_API_KEY=0 only for local debug.
 const REQUIRE_API_KEY = process.env.REQUIRE_API_KEY !== '0';
 const API_KEY = process.env.API_KEY || '';
+// Browser UI gate: https://your-app.northflank.app/?token=WEB_TOKEN
+const WEB_TOKEN = (process.env.WEB_TOKEN || '').trim();
 if (REQUIRE_API_KEY && !API_KEY) {
   console.error('[COLAB-BACKEND] FATAL: API_KEY is required. Set env API_KEY or REQUIRE_API_KEY=0 for local dev.');
   process.exit(1);
 }
 
-// Persist colab-cli state on volume (Northflank: mount at /data, set HOME=/data COLAB_HOME=/data)
 if (process.env.COLAB_HOME) {
   process.env.HOME = process.env.COLAB_HOME;
 }
@@ -31,7 +43,6 @@ const TOKEN_FILE = path.join(CONFIG_DIR, 'token.json');
 const HELPER_SCRIPT = path.join(__dirname, 'colab_auth_helper.py');
 try { fs.mkdirSync(CONFIG_DIR, { recursive: true }); } catch (e) {}
 
-// Auto-seed token from environment variable if provided
 if (process.env.COLAB_AUTH_TOKEN && !fs.existsSync(TOKEN_FILE)) {
   try {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
@@ -39,8 +50,7 @@ if (process.env.COLAB_AUTH_TOKEN && !fs.existsSync(TOKEN_FILE)) {
     if (tokenData.startsWith('{')) {
       fs.writeFileSync(TOKEN_FILE, tokenData, 'utf8');
     } else {
-      const decoded = Buffer.from(tokenData, 'base64').toString('utf8');
-      fs.writeFileSync(TOKEN_FILE, decoded, 'utf8');
+      fs.writeFileSync(TOKEN_FILE, Buffer.from(tokenData, 'base64').toString('utf8'), 'utf8');
     }
     console.log('[COLAB-BACKEND] Seeded token.json from COLAB_AUTH_TOKEN env variable');
   } catch (err) {
@@ -48,48 +58,126 @@ if (process.env.COLAB_AUTH_TOKEN && !fs.existsSync(TOKEN_FILE)) {
   }
 }
 
-// Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
-// Multer for file uploads
 const upload = multer({ dest: '/tmp/colab_uploads/' });
 
-// Auth check middleware — when API_KEY is set, all /api/* require it
+function parseCookies(req) {
+  const out = {};
+  const raw = req.headers.cookie;
+  if (!raw) return out;
+  raw.split(';').forEach((part) => {
+    const i = part.indexOf('=');
+    if (i === -1) return;
+    const k = part.slice(0, i).trim();
+    const v = part.slice(i + 1).trim();
+    try { out[k] = decodeURIComponent(v); } catch (e) { out[k] = v; }
+  });
+  return out;
+}
+
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  let ok = 0;
+  for (let i = 0; i < a.length; i++) ok |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return ok === 0;
+}
+
+/** Gate HTML/static UI when WEB_TOKEN is set. Open: https://host/?token=WEB_TOKEN */
+function gateWebUi(req, res, next) {
+  if (!WEB_TOKEN) return next();
+
+  // Always public (Northflank health checks)
+  if (req.path === '/health') return next();
+
+  // REST + uploads use API_KEY, not WEB_TOKEN
+  if (req.path.startsWith('/api')) return next();
+
+  const qToken = typeof req.query.token === 'string' ? req.query.token : '';
+  const cookies = parseCookies(req);
+  const cToken = cookies.web_token || '';
+
+  if (qToken && safeEqual(qToken, WEB_TOKEN)) {
+    const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    res.setHeader(
+      'Set-Cookie',
+      'web_token=' + encodeURIComponent(WEB_TOKEN) +
+        '; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000' +
+        (secure ? '; Secure' : '')
+    );
+    // Drop token from URL after setting cookie (cleaner + less leakage via Referer)
+    if (req.path === '/' || req.path === '') {
+      return res.redirect(302, '/');
+    }
+    return next();
+  }
+
+  if (cToken && safeEqual(cToken, WEB_TOKEN)) {
+    return next();
+  }
+
+  res.status(401).type('html').send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Unauthorized</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:#07090e;color:#00ff66;font-family:ui-monospace,monospace;padding:24px;text-align:center}
+  code{color:#00f0ff}
+  p{color:#8892b0;max-width:420px;line-height:1.5}
+</style></head>
+<body><div>
+  <h1 style="letter-spacing:1px">401 // ACCESS DENIED</h1>
+  <p>Open with your secret link:<br>
+  <code>https://&lt;host&gt;/?token=WEB_TOKEN</code></p>
+  <p style="font-size:12px">Set <code>WEB_TOKEN</code> in Northflank environment variables.</p>
+</div></body></html>`);
+}
+
+app.use(gateWebUi);
+app.use(express.static(path.join(__dirname, 'public')));
+
 const checkApiKey = (req, res, next) => {
-  if (!API_KEY) return next(); // only when REQUIRE_API_KEY=0 and empty key
-  const clientKey = req.headers['x-api-key'] || req.query.api_key || req.headers['authorization']?.replace(/^Bearer\s+/i, '');
+  if (!API_KEY) return next();
+  const clientKey =
+    req.headers['x-api-key'] ||
+    req.query.api_key ||
+    (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
   if (clientKey && clientKey === API_KEY) return next();
   return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key (header x-api-key)' });
 };
 
-// Helper to run shell / python commands
+function checkWsApiKey(reqUrl) {
+  if (!API_KEY) return true;
+  try {
+    const q = url.parse(reqUrl, true).query || {};
+    return q.api_key === API_KEY;
+  } catch (e) {
+    return false;
+  }
+}
+
 function runCommand(cmd, args = [], stdinData = null, timeoutMs = 60000) {
   return new Promise((resolve) => {
     const startTime = Date.now();
     const proc = spawn(cmd, args, {
-      env: { ...process.env, PYTHONUNBUFFERED: '1' }
+      env: { ...process.env, PYTHONUNBUFFERED: '1', HOME: process.env.HOME }
     });
-
     let stdout = '';
     let stderr = '';
     let timedOut = false;
-
     const timer = setTimeout(() => {
       timedOut = true;
-      proc.kill('SIGKILL');
+      try { proc.kill('SIGKILL'); } catch (e) {}
     }, timeoutMs);
-
     if (stdinData !== null) {
       proc.stdin.write(stdinData);
       proc.stdin.end();
     }
-
     proc.stdout.on('data', (d) => { stdout += d.toString(); });
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
-
     proc.on('close', (code) => {
       clearTimeout(timer);
       resolve({
@@ -101,7 +189,6 @@ function runCommand(cmd, args = [], stdinData = null, timeoutMs = 60000) {
         durationMs: Date.now() - startTime
       });
     });
-
     proc.on('error', (err) => {
       clearTimeout(timer);
       resolve({
@@ -116,9 +203,8 @@ function runCommand(cmd, args = [], stdinData = null, timeoutMs = 60000) {
   });
 }
 
-// --- REST ENDPOINTS ---
+// --- REST ---
 
-// Health & Info
 app.get('/health', async (req, res) => {
   const versionRes = await runCommand('colab', ['version'], null, 5000);
   res.json({
@@ -131,81 +217,64 @@ app.get('/health', async (req, res) => {
     platform: process.platform,
     apiKeyRequired: Boolean(API_KEY),
     configDir: CONFIG_DIR,
-    mode: 'line-exec (colab exec per command — not a persistent PTY shell)'
+    ptyAvailable: Boolean(pty),
+    webTokenRequired: Boolean(WEB_TOKEN),
+    endpoints: {
+      lineExecWs: '/terminal?session=NAME&api_key=KEY',
+      realPtyWs: '/pty?session=NAME&api_key=KEY&cols=80&rows=24',
+      webUi: WEB_TOKEN ? '/?token=WEB_TOKEN' : '/'
+    },
+    mode: pty
+      ? 'PTY (colab console) + line-exec fallback'
+      : 'line-exec only (node-pty missing)'
   });
 });
 
-// System Overview & Auth Status
 app.get('/api/status', checkApiKey, async (req, res) => {
   const authRes = await runCommand('python3', [HELPER_SCRIPT, 'status'], null, 5000);
   let authData = { authenticated: false };
-  try {
-    authData = JSON.parse(authRes.stdout.trim());
-  } catch (e) {
+  try { authData = JSON.parse(authRes.stdout.trim()); } catch (e) {
     authData = { error: authRes.stderr || 'Status parse error', authenticated: false };
   }
-
   let sessions = [];
   if (fs.existsSync(SESSIONS_FILE)) {
-    try {
-      const sessJson = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'));
-      sessions = Object.values(sessJson);
-    } catch (e) {}
+    try { sessions = Object.values(JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'))); } catch (e) {}
   }
-
   res.json({
     auth: authData,
     sessionsCount: sessions.length,
     sessions,
     serverUptime: process.uptime(),
-    memory: process.memoryUsage()
+    memory: process.memoryUsage(),
+    ptyAvailable: Boolean(pty)
   });
 });
 
-// Auth Endpoints
 app.get('/api/auth/status', checkApiKey, async (req, res) => {
   const result = await runCommand('python3', [HELPER_SCRIPT, 'status'], null, 8000);
-  try {
-    const data = JSON.parse(result.stdout.trim());
-    res.json(data);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to inspect auth status', details: result.stderr });
-  }
+  try { res.json(JSON.parse(result.stdout.trim())); }
+  catch (e) { res.status(500).json({ error: 'Failed to inspect auth status', details: result.stderr }); }
 });
 
 app.get('/api/auth/login-url', checkApiKey, async (req, res) => {
   const result = await runCommand('python3', [HELPER_SCRIPT, 'generate-url'], null, 10000);
-  try {
-    const data = JSON.parse(result.stdout.trim());
-    res.json(data);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to generate OAuth URL', details: result.stderr });
-  }
+  try { res.json(JSON.parse(result.stdout.trim())); }
+  catch (e) { res.status(500).json({ error: 'Failed to generate OAuth URL', details: result.stderr }); }
 });
 
 app.post('/api/auth/code', checkApiKey, async (req, res) => {
   const { code } = req.body;
-  if (!code) {
-    return res.status(400).json({ error: 'Authorization code is required' });
-  }
+  if (!code) return res.status(400).json({ error: 'Authorization code is required' });
   const result = await runCommand('python3', [HELPER_SCRIPT, 'exchange-code', code.trim()], null, 15000);
-  try {
-    const data = JSON.parse(result.stdout.trim());
-    res.json(data);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to exchange code', details: result.stderr });
-  }
+  try { res.json(JSON.parse(result.stdout.trim())); }
+  catch (e) { res.status(500).json({ error: 'Failed to exchange code', details: result.stderr }); }
 });
 
 app.post('/api/auth/token', checkApiKey, async (req, res) => {
   const tokenData = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
   const result = await runCommand('python3', [HELPER_SCRIPT, 'save-token'], tokenData, 5000);
-  try {
-    const data = JSON.parse(result.stdout.trim());
-    res.json(data);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to save token', details: result.stderr });
-  }
+  try { res.json(JSON.parse(result.stdout.trim())); }
+  catch (e) { res.status(500).json({ error: 'Failed to save token', details: result.stderr }); }
 });
 
 app.delete('/api/auth', checkApiKey, (req, res) => {
@@ -217,19 +286,12 @@ app.delete('/api/auth', checkApiKey, (req, res) => {
   }
 });
 
-// Session Management
 app.get('/api/sessions', checkApiKey, async (req, res) => {
-  // First read local state cache if exists
   let localSessions = {};
   if (fs.existsSync(SESSIONS_FILE)) {
-    try {
-      localSessions = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'));
-    } catch (e) {}
+    try { localSessions = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8')); } catch (e) {}
   }
-
-  // Also query colab sessions CLI
   const cliRes = await runCommand('colab', ['sessions'], null, 12000);
-
   res.json({
     sessions: Object.values(localSessions),
     cliOutput: cliRes.stdout || cliRes.stderr,
@@ -241,20 +303,11 @@ app.post('/api/sessions', checkApiKey, async (req, res) => {
   const { name, gpu, tpu, highMem } = req.body;
   const sessionName = name || 'colab-' + Math.random().toString(16).substring(2, 8);
   const args = ['new', '-s', sessionName];
-
-  if (gpu && gpu !== 'NONE') {
-    args.push('--gpu', gpu);
-  } else if (tpu && tpu !== 'NONE') {
-    args.push('--tpu', tpu);
-  }
-
-  if (highMem) {
-    args.push('--high-mem');
-  }
-
-  console.log(`[COLAB-BACKEND] Provisioning session: colab ${args.join(' ')}`);
-  const result = await runCommand('colab', args, null, 60000);
-
+  if (gpu && gpu !== 'NONE') args.push('--gpu', gpu);
+  else if (tpu && tpu !== 'NONE') args.push('--tpu', tpu);
+  if (highMem) args.push('--high-mem');
+  console.log(`[COLAB-BACKEND] Provisioning: colab ${args.join(' ')}`);
+  const result = await runCommand('colab', args, null, 120000);
   res.json({
     sessionName,
     success: result.success,
@@ -267,71 +320,38 @@ app.post('/api/sessions', checkApiKey, async (req, res) => {
 app.get('/api/sessions/:name', checkApiKey, async (req, res) => {
   const sessionName = req.params.name;
   const result = await runCommand('colab', ['status', '-s', sessionName], null, 10000);
-  res.json({
-    sessionName,
-    output: result.stdout || result.stderr,
-    success: result.success
-  });
+  res.json({ sessionName, output: result.stdout || result.stderr, success: result.success });
 });
 
 app.delete('/api/sessions/:name', checkApiKey, async (req, res) => {
   const sessionName = req.params.name;
-  console.log(`[COLAB-BACKEND] Stopping session: ${sessionName}`);
   const result = await runCommand('colab', ['stop', '-s', sessionName], null, 30000);
-  res.json({
-    sessionName,
-    success: result.success,
-    output: result.stdout || result.stderr
-  });
+  res.json({ sessionName, success: result.success, output: result.stdout || result.stderr });
 });
 
 app.post('/api/sessions/:name/restart', checkApiKey, async (req, res) => {
   const sessionName = req.params.name;
   const result = await runCommand('colab', ['restart-kernel', '-s', sessionName], null, 20000);
-  res.json({
-    sessionName,
-    success: result.success,
-    output: result.stdout || result.stderr
-  });
+  res.json({ sessionName, success: result.success, output: result.stdout || result.stderr });
 });
 
 app.get('/api/sessions/:name/url', checkApiKey, async (req, res) => {
   const sessionName = req.params.name;
   const result = await runCommand('colab', ['url', '-s', sessionName], null, 10000);
-  res.json({
-    sessionName,
-    url: result.stdout.trim(),
-    success: result.success
-  });
+  res.json({ sessionName, url: (result.stdout || '').trim(), success: result.success });
 });
 
-// Command Execution
 app.post('/api/exec', checkApiKey, async (req, res) => {
   let { session, code, isBash, timeout } = req.body;
-  if (!code) {
-    return res.status(400).json({ error: 'Code or command is required' });
-  }
-
-  // Format code if bash is requested
+  if (!code) return res.status(400).json({ error: 'Code or command is required' });
   let execCode = code;
   if (isBash) {
-    // If multiline bash or single command
-    if (code.includes('\n')) {
-      execCode = '%%bash\n' + code;
-    } else {
-      execCode = code.startsWith('!') ? code : '!' + code;
-    }
+    execCode = code.includes('\n') ? '%%bash\n' + code : (code.startsWith('!') ? code : '!' + code);
   }
-
   const timeoutMs = (timeout || 60) * 1000;
   const args = ['exec'];
-  if (session) {
-    args.push('-s', session);
-  }
-
-  console.log(`[COLAB-BACKEND] Executing on session '${session || 'default'}': ${code.substring(0, 80)}...`);
+  if (session) args.push('-s', session);
   const result = await runCommand('colab', args, execCode, timeoutMs);
-
   res.json({
     success: result.success,
     stdout: result.stdout,
@@ -342,77 +362,44 @@ app.post('/api/exec', checkApiKey, async (req, res) => {
   });
 });
 
-// Streaming Execution via Server-Sent Events (SSE)
 app.post('/api/exec/stream', checkApiKey, (req, res) => {
-  let { session, code, isBash, timeout } = req.body;
-  if (!code) {
-    return res.status(400).json({ error: 'Code or command is required' });
-  }
-
+  let { session, code, isBash } = req.body;
+  if (!code) return res.status(400).json({ error: 'Code or command is required' });
   let execCode = code;
   if (isBash) {
     execCode = code.includes('\n') ? '%%bash\n' + code : (code.startsWith('!') ? code : '!' + code);
   }
-
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-
   const args = ['exec'];
   if (session) args.push('-s', session);
-
   const proc = spawn('colab', args, { env: { ...process.env, PYTHONUNBUFFERED: '1' } });
   proc.stdin.write(execCode);
   proc.stdin.end();
-
   const sendEvent = (event, data) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
-
-  proc.stdout.on('data', (d) => {
-    sendEvent('stdout', d.toString());
-  });
-
-  proc.stderr.on('data', (d) => {
-    sendEvent('stderr', d.toString());
-  });
-
-  proc.on('close', (code) => {
-    sendEvent('close', { exitCode: code });
-    res.end();
-  });
-
-  proc.on('error', (err) => {
-    sendEvent('error', { error: err.message });
-    res.end();
-  });
-
-  req.on('close', () => {
-    proc.kill('SIGTERM');
-  });
+  proc.stdout.on('data', (d) => sendEvent('stdout', d.toString()));
+  proc.stderr.on('data', (d) => sendEvent('stderr', d.toString()));
+  proc.on('close', (code) => { sendEvent('close', { exitCode: code }); res.end(); });
+  proc.on('error', (err) => { sendEvent('error', { error: err.message }); res.end(); });
+  req.on('close', () => { try { proc.kill('SIGTERM'); } catch (e) {} });
 });
 
-// Hardware & GPU Monitoring
 app.get('/api/gpu', checkApiKey, async (req, res) => {
   const session = req.query.session;
   const args = ['exec'];
   if (session) args.push('-s', session);
-
   const queryCmd = '!nvidia-smi --query-gpu=name,driver_version,memory.total,memory.used,memory.free,temperature.gpu,utilization.gpu,utilization.memory --format=csv,noheader,nounits';
   const result = await runCommand('colab', args, queryCmd, 15000);
-
   if (!result.success || !result.stdout) {
-    return res.json({
-      hasGpu: false,
-      raw: result.stdout || result.stderr,
-      message: 'No GPU detected or command failed'
-    });
+    return res.json({ hasGpu: false, raw: result.stdout || result.stderr, message: 'No GPU detected or command failed' });
   }
-
   try {
-    const lines = result.stdout.trim().split('\n').filter(l => l.trim().length > 0);
-    const gpus = lines.map(line => {
-      const parts = line.split(',').map(p => p.trim());
+    const lines = result.stdout.trim().split('\n').filter((l) => l.trim().length > 0);
+    const gpus = lines.map((line) => {
+      const parts = line.split(',').map((p) => p.trim());
       return {
         name: parts[0],
         driverVersion: parts[1],
@@ -430,183 +417,136 @@ app.get('/api/gpu', checkApiKey, async (req, res) => {
   }
 });
 
-// System Specs Monitor
 app.get('/api/system', checkApiKey, async (req, res) => {
   const session = req.query.session;
   const args = ['exec'];
   if (session) args.push('-s', session);
-
-  const sysCmd = '!echo "===CPU===" && lscpu | head -n 15 && echo "===MEM===" && free -m && echo "===DISK===" && df -h /content && echo "===OS===" && uname -a';
-  const result = await runCommand('colab', args, sysCmd, 15000);
-
-  res.json({
-    success: result.success,
-    raw: result.stdout || result.stderr
-  });
+  const cmd = '!echo "=== CPU ==="; lscpu | head -20; echo; echo "=== MEM ==="; free -h; echo; echo "=== DISK ==="; df -h /content 2>/dev/null || df -h /';
+  const result = await runCommand('colab', args, cmd, 20000);
+  res.json({ success: result.success, output: result.stdout || result.stderr });
 });
 
-// Compute Unit Usage
 app.get('/api/usage', checkApiKey, async (req, res) => {
-  const result = await runCommand('colab', ['usage'], null, 10000);
-  res.json({
-    output: result.stdout || result.stderr,
-    success: result.success
-  });
+  const result = await runCommand('colab', ['usage'], null, 15000);
+  res.json({ success: result.success, output: result.stdout || result.stderr });
 });
 
-// File Management
 app.get('/api/files', checkApiKey, async (req, res) => {
   const session = req.query.session;
   const remotePath = req.query.path || '/content';
   const args = ['ls'];
   if (session) args.push('-s', session);
   args.push(remotePath);
-
   const result = await runCommand('colab', args, null, 15000);
-  res.json({
-    path: remotePath,
-    output: result.stdout || result.stderr,
-    success: result.success
-  });
+  res.json({ success: result.success, path: remotePath, output: result.stdout || result.stderr });
 });
 
 app.get('/api/files/download', checkApiKey, async (req, res) => {
   const session = req.query.session;
   const remotePath = req.query.path;
-  if (!remotePath) return res.status(400).json({ error: 'path parameter is required' });
-
-  const fileName = path.basename(remotePath);
-  const localDest = path.join('/tmp', 'dl_' + Date.now() + '_' + fileName);
-
+  if (!remotePath) return res.status(400).json({ error: 'path required' });
+  const localTmp = path.join('/tmp', 'colab_dl_' + Date.now() + '_' + path.basename(remotePath));
   const args = ['download'];
   if (session) args.push('-s', session);
-  args.push(remotePath, localDest);
-
-  const result = await runCommand('colab', args, null, 30000);
-  if (!result.success || !fs.existsSync(localDest)) {
-    return res.status(500).json({ error: 'Download failed', details: result.stderr });
+  args.push(remotePath, localTmp);
+  const result = await runCommand('colab', args, null, 120000);
+  if (!result.success || !fs.existsSync(localTmp)) {
+    return res.status(500).json({ error: result.stderr || 'download failed' });
   }
-
-  res.download(localDest, fileName, () => {
-    fs.unlink(localDest, () => {});
+  res.download(localTmp, path.basename(remotePath), () => {
+    try { fs.unlinkSync(localTmp); } catch (e) {}
   });
 });
 
 app.post('/api/files/upload', checkApiKey, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'file required' });
   const session = req.body.session;
-  const remotePath = req.body.remotePath || '/content';
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-  const targetRemote = path.posix.join(remotePath, req.file.originalname);
+  const remotePath = req.body.remotePath || ('/content/' + req.file.originalname);
   const args = ['upload'];
   if (session) args.push('-s', session);
-  args.push(req.file.path, targetRemote);
-
-  const result = await runCommand('colab', args, null, 30000);
-  fs.unlink(req.file.path, () => {});
-
-  res.json({
-    success: result.success,
-    remotePath: targetRemote,
-    output: result.stdout || result.stderr
-  });
+  args.push(req.file.path, remotePath);
+  const result = await runCommand('colab', args, null, 120000);
+  try { fs.unlinkSync(req.file.path); } catch (e) {}
+  res.json({ success: result.success, remotePath, output: result.stdout || result.stderr });
 });
 
-// Package Installation
 app.post('/api/install', checkApiKey, async (req, res) => {
   const { session, packages } = req.body;
   if (!packages) return res.status(400).json({ error: 'packages list is required' });
-
-  const pkgList = Array.isArray(packages) ? packages : packages.trim().split(/\s+/);
+  const pkgList = Array.isArray(packages) ? packages : String(packages).trim().split(/\s+/);
   const args = ['install'];
   if (session) args.push('-s', session);
   args.push(...pkgList);
-
-  const result = await runCommand('colab', args, null, 120000);
-  res.json({
-    success: result.success,
-    output: result.stdout || result.stderr,
-    durationMs: result.durationMs
-  });
+  const result = await runCommand('colab', args, null, 300000);
+  res.json({ success: result.success, output: result.stdout || result.stderr, durationMs: result.durationMs });
 });
 
-// --- WEBSOCKET TERMINAL SERVER ---
+// --- WebSocket upgrade router ---
 
-wss.on('connection', (ws, req) => {
-  const url = new URL(req.url, 'http://localhost');
-  const session = url.searchParams.get('session') || '';
-  const clientKey = url.searchParams.get('api_key') || '';
+server.on('upgrade', (request, socket, head) => {
+  const { pathname } = url.parse(request.url);
+  if (pathname === '/terminal') {
+    wssExec.handleUpgrade(request, socket, head, (ws) => {
+      wssExec.emit('connection', ws, request);
+    });
+  } else if (pathname === '/pty') {
+    wssPty.handleUpgrade(request, socket, head, (ws) => {
+      wssPty.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
 
-  if (API_KEY && clientKey !== API_KEY) {
+// Line-exec WS (legacy / fallback)
+wssExec.on('connection', (ws, req) => {
+  if (!checkWsApiKey(req.url)) {
     ws.send(JSON.stringify({ type: 'error', data: 'Unauthorized: Invalid API Key\r\n' }));
     return ws.close();
   }
-
+  const q = url.parse(req.url, true).query || {};
+  const session = q.session || '';
   let activeChild = null;
 
   ws.send(JSON.stringify({
     type: 'banner',
-    data: `\x1b[32;1m[COLAB HACKER TERMINAL ONLINE]\x1b[0m\r\n` +
-          `\x1b[36mTarget Session: ${session || 'DEFAULT'}\x1b[0m\r\n` +
-          `\x1b[90mPowered by Google Colab CLI & Northflank\x1b[0m\r\n` +
-          `\x1b[33mMode: line-exec (each line → colab exec). Not a persistent interactive shell.\x1b[0m\r\n\r\n`
+    data:
+      '\x1b[33m[LINE-EXEC MODE]\x1b[0m each line runs as separate colab exec.\r\n' +
+      '\x1b[90mFor a real shell use the PTY tab / WS /pty\x1b[0m\r\n' +
+      `\x1b[36mSession: ${session || 'DEFAULT'}\x1b[0m\r\n\r\n`
   }));
 
-  ws.on('message', async (rawMsg) => {
+  ws.on('message', (rawMsg) => {
     try {
       const msg = JSON.parse(rawMsg.toString());
-
       if (msg.type === 'exec') {
         const cmd = msg.command || '';
-        const isBash = msg.isBash !== false; // Default to bash mode
+        const isBash = msg.isBash !== false;
         const targetSession = msg.session || session;
-
-        if (cmd === 'clear') {
-          return ws.send(JSON.stringify({ type: 'clear' }));
-        }
-
-        // Format code
+        if (cmd === 'clear') return ws.send(JSON.stringify({ type: 'clear' }));
         let execCode = cmd;
         if (isBash) {
           execCode = cmd.includes('\n') ? '%%bash\n' + cmd : (cmd.startsWith('!') ? cmd : '!' + cmd);
         }
-
         const args = ['exec'];
         if (targetSession) args.push('-s', targetSession);
-
-        ws.send(JSON.stringify({
-          type: 'exec_start',
-          command: cmd,
-          session: targetSession
-        }));
-
+        ws.send(JSON.stringify({ type: 'exec_start', command: cmd, session: targetSession }));
         activeChild = spawn('colab', args, { env: { ...process.env, PYTHONUNBUFFERED: '1' } });
         activeChild.stdin.write(execCode);
         activeChild.stdin.end();
-
-        activeChild.stdout.on('data', (data) => {
-          ws.send(JSON.stringify({ type: 'stdout', data: data.toString() }));
-        });
-
-        activeChild.stderr.on('data', (data) => {
-          ws.send(JSON.stringify({ type: 'stderr', data: data.toString() }));
-        });
-
+        activeChild.stdout.on('data', (data) => ws.send(JSON.stringify({ type: 'stdout', data: data.toString() })));
+        activeChild.stderr.on('data', (data) => ws.send(JSON.stringify({ type: 'stderr', data: data.toString() })));
         activeChild.on('close', (exitCode) => {
           activeChild = null;
           ws.send(JSON.stringify({
             type: 'exec_end',
             exitCode,
-            data: `\r\n\x1b[90m[Process completed with exit code ${exitCode}]\x1b[0m\r\n`
+            data: `\r\n\x1b[90m[exit ${exitCode}]\x1b[0m\r\n`
           }));
         });
-
         activeChild.on('error', (err) => {
           activeChild = null;
-          ws.send(JSON.stringify({
-            type: 'error',
-            data: `\r\n\x1b[31;1mError: ${err.message}\x1b[0m\r\n`
-          }));
+          ws.send(JSON.stringify({ type: 'error', data: err.message + '\r\n' }));
         });
       } else if (msg.type === 'cancel' || msg.type === 'sigint') {
         if (activeChild) {
@@ -621,20 +561,132 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     if (activeChild) {
-      activeChild.kill('SIGTERM');
+      try { activeChild.kill('SIGTERM'); } catch (e) {}
       activeChild = null;
     }
   });
 });
 
-// Start Server
+// Real PTY WS — colab console inside node-pty
+wssPty.on('connection', (ws, req) => {
+  if (!checkWsApiKey(req.url)) {
+    ws.send(JSON.stringify({ type: 'error', data: 'Unauthorized API key' }));
+    return ws.close();
+  }
+  if (!pty) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      data: 'node-pty is not installed on this server. Rebuild Docker image with node-pty.'
+    }));
+    return ws.close();
+  }
+
+  const q = url.parse(req.url, true).query || {};
+  const session = (q.session || '').trim();
+  let cols = Math.max(20, parseInt(q.cols, 10) || 80);
+  let rows = Math.max(5, parseInt(q.rows, 10) || 24);
+  // mode: console (default) | ssh
+  const mode = (q.mode || 'console').toLowerCase();
+
+  const args = mode === 'ssh' ? ['ssh'] : ['console'];
+  if (session) args.push('-s', session);
+
+  console.log(`[PTY] spawn colab ${args.join(' ')} cols=${cols} rows=${rows}`);
+
+  let term;
+  try {
+    term = pty.spawn('colab', args, {
+      name: 'xterm-256color',
+      cols,
+      rows,
+      cwd: process.env.HOME || os.homedir(),
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        PYTHONUNBUFFERED: '1',
+        HOME: process.env.HOME || os.homedir()
+      }
+    });
+  } catch (err) {
+    ws.send(JSON.stringify({ type: 'error', data: 'Failed to spawn PTY: ' + err.message }));
+    return ws.close();
+  }
+
+  ws.send(JSON.stringify({
+    type: 'ready',
+    data: {
+      session: session || null,
+      mode,
+      cols,
+      rows,
+      pid: term.pid
+    }
+  }));
+
+  term.onData((data) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      // binary-ish text stream for xterm
+      try {
+        ws.send(JSON.stringify({ type: 'stdout', data }));
+      } catch (e) {}
+    }
+  });
+
+  term.onExit(({ exitCode, signal }) => {
+    console.log(`[PTY] exit code=${exitCode} signal=${signal}`);
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: 'exit', exitCode, signal }));
+      } catch (e) {}
+      try { ws.close(); } catch (e) {}
+    }
+  });
+
+  ws.on('message', (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch (e) {
+      // raw text → stdin
+      try { term.write(raw.toString()); } catch (err) {}
+      return;
+    }
+    if (msg.type === 'stdin' && typeof msg.data === 'string') {
+      try { term.write(msg.data); } catch (e) {}
+    } else if (msg.type === 'resize') {
+      const c = parseInt(msg.cols, 10);
+      const r = parseInt(msg.rows, 10);
+      if (c > 0 && r > 0) {
+        cols = c;
+        rows = r;
+        try { term.resize(cols, rows); } catch (e) {}
+      }
+    } else if (msg.type === 'ping') {
+      try { ws.send(JSON.stringify({ type: 'pong' })); } catch (e) {}
+    }
+  });
+
+  ws.on('close', () => {
+    try { term.kill(); } catch (e) {}
+  });
+
+  ws.on('error', () => {
+    try { term.kill(); } catch (e) {}
+  });
+});
+
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n======================================================`);
-  console.log(`⚡ GOOGLE COLAB CLI BACKEND (NORTHFLANK) RUNNING`);
-  console.log(`⚡ Port: ${PORT}`);
-  console.log(`⚡ API key required: ${Boolean(API_KEY)}`);
-  console.log(`⚡ Config dir: ${CONFIG_DIR}`);
-  console.log(`⚡ Mode: line-exec (colab exec), not persistent PTY`);
-  console.log(`⚡ WebSocket: /terminal?session=NAME&api_key=...`);
-  console.log(`======================================================\n`);
+  console.log('');
+  console.log('======================================================');
+  console.log('  COLAB CLI BACKEND');
+  console.log('  Port:              ' + PORT);
+  console.log('  API key required:  ' + Boolean(API_KEY));
+  console.log('  Config dir:        ' + CONFIG_DIR);
+  console.log('  node-pty:          ' + (pty ? 'YES' : 'NO'));
+  console.log('  WEB_TOKEN gate:    ' + (WEB_TOKEN ? 'ON (open /?token=...)' : 'OFF'));
+  console.log('  Line-exec WS:      /terminal?session=&api_key=');
+  console.log('  Real PTY WS:       /pty?session=&api_key=&cols=&rows=');
+  console.log('======================================================');
+  console.log('');
 });
