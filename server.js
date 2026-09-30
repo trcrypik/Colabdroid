@@ -507,13 +507,94 @@ app.post('/api/drivemount', checkApiKey, async (req, res) => {
   const args = ['drivemount'];
   if (session) args.push('-s', session);
   if (mountPath) args.push(mountPath);
-  console.log('[COLAB-BACKEND] drivemount', args.join(' '));
-  const result = await runCommand('colab', args, null, 180000);
-  res.json({
-    success: result.success,
-    mountPath,
-    output: result.stdout || result.stderr,
-    durationMs: result.durationMs
+  console.log('[COLAB-BACKEND] drivemount (auto-Enter after OAuth prompt)', args.join(' '));
+
+  // CLI prints Google auth URL then waits for user to press Enter — no TTY in API mode.
+  // We capture output, extract URL, and send newlines so mount can finish after browser auth.
+  const started = Date.now();
+  const proc = spawn('colab', args, {
+    env: { ...process.env, PYTHONUNBUFFERED: '1', HOME: process.env.HOME }
+  });
+  let stdout = '';
+  let stderr = '';
+  let enterCount = 0;
+  const urlRe = /https?:\/\/[^\s]+/g;
+  let foundUrls = [];
+  let urlSeen = false;
+  let enterTimer = null;
+  let firstEnter = null;
+
+  const sendEnter = () => {
+    if (!proc.stdin || proc.stdin.destroyed) return;
+    try {
+      proc.stdin.write('\n');
+      enterCount++;
+      console.log('[drivemount] sent Enter #' + enterCount);
+    } catch (e) {}
+  };
+
+  const armAutoEnter = () => {
+    if (urlSeen) return;
+    urlSeen = true;
+    // Give user time to open URL and click Allow, then send Enter repeatedly
+    firstEnter = setTimeout(() => {
+      sendEnter();
+      enterTimer = setInterval(sendEnter, 6000);
+    }, 12000);
+  };
+
+  proc.stdout.on('data', (d) => {
+    const s = d.toString();
+    stdout += s;
+    const m = s.match(urlRe);
+    if (m) { foundUrls = foundUrls.concat(m); armAutoEnter(); }
+    // also arm if CLI asks to press enter even without matching earlier
+    if (/press\s+enter/i.test(s) || /after\s+authorization/i.test(s)) armAutoEnter();
+  });
+  proc.stderr.on('data', (d) => {
+    const s = d.toString();
+    stderr += s;
+    const m = s.match(urlRe);
+    if (m) { foundUrls = foundUrls.concat(m); armAutoEnter(); }
+    if (/press\s+enter/i.test(s) || /after\s+authorization/i.test(s)) armAutoEnter();
+  });
+
+  // Fallback: if no URL detected, still try Enter after 25s (some CLIs buffer output)
+  const fallbackEnter = setTimeout(() => { armAutoEnter(); }, 25000);
+
+  const timeoutMs = 180000;
+  const killer = setTimeout(() => {
+    try { proc.kill('SIGKILL'); } catch (e) {}
+  }, timeoutMs);
+
+  proc.on('close', (code) => {
+    if (enterTimer) clearInterval(enterTimer);
+    if (firstEnter) clearTimeout(firstEnter);
+    clearTimeout(fallbackEnter);
+    clearTimeout(killer);
+    try { proc.stdin && proc.stdin.end(); } catch (e) {}
+    const output = (stdout || '') + (stderr ? '\n' + stderr : '');
+    // unique urls
+    const urls = [...new Set(foundUrls)];
+    res.json({
+      success: code === 0,
+      mountPath,
+      output,
+      authUrls: urls,
+      entersSent: enterCount,
+      exitCode: code,
+      durationMs: Date.now() - started,
+      hint: urls.length
+        ? 'Open auth URL in browser, confirm access. Server auto-sends Enter while waiting.'
+        : 'If stuck: open PTY terminal and run: colab drivemount -s SESSION, then press [ENTER] after browser auth.'
+    });
+  });
+
+  proc.on('error', (err) => {
+    clearInterval(enterTimer);
+    clearTimeout(firstEnter);
+    clearTimeout(killer);
+    res.status(500).json({ success: false, error: err.message, output: stdout + stderr });
   });
 });
 

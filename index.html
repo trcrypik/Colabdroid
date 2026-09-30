@@ -91,6 +91,16 @@
     #xtermBox .xterm-viewport { overflow-y: auto !important; }
     /* allow text selection / copy in xterm */
     #xtermBox, #xtermBox .xterm, #xtermBox .xterm-screen { user-select: text; -webkit-user-select: text; }
+    #selectModePanel {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -webkit-touch-callout: default !important;
+      white-space: pre-wrap;
+      word-break: break-word;
+      touch-action: pan-y;
+    }
+    #selectModeBar { display: none; }
+    #selectModeBar.on { display: flex !important; }
     #lineExecBox { display: none; flex-direction: column; flex: 1; min-height: 0; }
     #lineExecBox.visible { display: flex; }
     #xtermBox.hidden { display: none; }
@@ -186,8 +196,16 @@
         <button class="btn" id="btnModeExec" type="button" onclick="setTermMode('exec')">[LINE-EXEC]</button>
         <button class="btn btn-cyan" type="button" onclick="reconnectTerm()">[RECONNECT]</button>
         <button class="btn btn-danger" type="button" onclick="disconnectTerm()">[DISCONNECT]</button>
+        <button class="btn" type="button" onclick="sendPtyEnter()" title="Send Enter to PTY (Drive OAuth)">[ENTER]</button>
+        <button class="btn" type="button" onclick="clearTerminal()">[CLEAR]</button>
         <button class="btn" type="button" onclick="copyTermSelection()">[COPY_SEL]</button>
-        <span class="hint">Select text → Ctrl/Cmd+C or [COPY_SEL]. Need active session.</span>
+        <button class="btn btn-cyan" type="button" onclick="toggleSelectMode()">[SELECT_TEXT]</button>
+        <span class="hint">Mobile: [SELECT_TEXT] for native selection handles. [ENTER] after Drive auth in PTY.</span>
+      </div>
+      <div id="selectModeBar" style="display:none;flex-shrink:0;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span class="hint" style="color:var(--cyan);">SELECT MODE — drag handles work on text below. [COPY_ALL] or long-press.</span>
+        <button class="btn" type="button" onclick="copySelectModeAll()">[COPY_ALL]</button>
+        <button class="btn" type="button" onclick="toggleSelectMode(false)">[BACK_TO_TERM]</button>
       </div>
       <div class="terminal-container">
         <div class="terminal-header">
@@ -195,6 +213,7 @@
           <span id="termStatus">OFFLINE</span>
         </div>
         <div id="xtermBox"></div>
+        <pre id="selectModePanel" class="terminal-logs" style="display:none;margin:0;flex:1;min-height:0;user-select:text;-webkit-user-select:text;-webkit-touch-callout:default;cursor:text;"></pre>
         <div id="lineExecBox">
           <div id="terminalLogs" class="terminal-logs">Line-exec mode.</div>
           <form class="terminal-input-bar" onsubmit="handleLineExec(event)">
@@ -335,6 +354,33 @@
     let termMode = localStorage.getItem('colab_term_mode') || 'pty';
     let ws = null, wsRetryTimer = null, term = null, fitAddon = null;
     let fmPath = '/content';
+    let termTranscript = '';
+    let selectMode = false;
+
+    function stripAnsi(s) {
+      if (!s) return '';
+      return String(s)
+        .replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '')
+        .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+        .replace(/\u001b\][^\u0007]*\u0007/g, '')
+        .replace(/\x1b\][^\x07]*\x07/g, '')
+        .replace(/\u001b[()][0-9A-B]/g, '')
+        .replace(/\r/g, '')
+        .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+    }
+    function appendTranscript(chunk) {
+      termTranscript += chunk;
+      if (termTranscript.length > 400000) {
+        termTranscript = termTranscript.slice(-300000);
+      }
+      if (selectMode) {
+        const pan = document.getElementById('selectModePanel');
+        if (pan) {
+          pan.textContent = termTranscript;
+          pan.scrollTop = pan.scrollHeight;
+        }
+      }
+    }
 
     function normalizeBaseUrl(raw) {
       let b = (raw || '').trim().replace(/\/$/, '');
@@ -495,17 +541,125 @@
       });
     }
 
+    function clearTerminal() {
+      if (term) {
+        try { term.clear(); term.write('\x1b[2J\x1b[H'); } catch (e) {
+          try { term.reset(); } catch (e2) {}
+        }
+      }
+      termTranscript = '';
+      const logs = document.getElementById('terminalLogs');
+      if (logs) logs.textContent = '';
+      const pan = document.getElementById('selectModePanel');
+      if (pan) pan.textContent = '';
+      setStatus('CLEARED', 'var(--text)');
+    }
+
+    function sendPtyEnter() {
+      if (termMode === 'pty' && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'stdin', data: '\r' }));
+        // also send newline variants some CLIs expect
+        setTimeout(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'stdin', data: '\n' }));
+          }
+        }, 50);
+        setStatus('ENTER SENT', 'var(--text)');
+      } else {
+        setStatus('PTY OFFLINE', 'var(--amber)');
+      }
+    }
+
+    function toggleSelectMode(force) {
+      if (typeof force === 'boolean') selectMode = force;
+      else selectMode = !selectMode;
+      const bar = document.getElementById('selectModeBar');
+      const xtermBox = document.getElementById('xtermBox');
+      const pan = document.getElementById('selectModePanel');
+      const lineBox = document.getElementById('lineExecBox');
+      if (selectMode) {
+        bar.classList.add('on');
+        if (termMode === 'pty') {
+          xtermBox.classList.add('hidden');
+          pan.style.display = 'block';
+          // prefer live transcript; fallback serialize from xterm buffer
+          let text = termTranscript;
+          if (!text && term) {
+            try {
+              const buf = [];
+              const len = term.buffer.active.length;
+              for (let i = 0; i < len; i++) {
+                const line = term.buffer.active.getLine(i);
+                if (line) buf.push(line.translateToString(true));
+              }
+              text = buf.join('\n');
+            } catch (e) {}
+          }
+          if (termMode === 'exec') {
+            text = document.getElementById('terminalLogs').textContent || text;
+          }
+          pan.textContent = text || '(empty)';
+        } else {
+          // line-exec: logs already selectable; still show panel with cleaned text
+          xtermBox.classList.add('hidden');
+          if (lineBox) lineBox.style.display = 'none';
+          pan.style.display = 'block';
+          pan.textContent = document.getElementById('terminalLogs').textContent || termTranscript || '(empty)';
+        }
+      } else {
+        bar.classList.remove('on');
+        pan.style.display = 'none';
+        if (termMode === 'pty') {
+          xtermBox.classList.remove('hidden');
+        } else {
+          xtermBox.classList.add('hidden');
+          if (lineBox) {
+            lineBox.style.display = '';
+            lineBox.classList.add('visible');
+          }
+        }
+        if (termMode === 'pty' && fitAddon) {
+          setTimeout(() => { try { fitAddon.fit(); sendResize(); } catch (e) {} }, 50);
+        }
+      }
+    }
+
+    function copySelectModeAll() {
+      const pan = document.getElementById('selectModePanel');
+      const text = (pan && pan.textContent) || termTranscript || '';
+      if (!text) { setStatus('EMPTY', 'var(--amber)'); return; }
+      navigator.clipboard.writeText(text).then(() => setStatus('COPIED ALL', 'var(--text)'))
+        .catch(() => {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); setStatus('COPIED ALL', 'var(--text)'); }
+          catch (e) { setStatus('COPY FAIL', 'var(--red)'); }
+          document.body.removeChild(ta);
+        });
+    }
+
     function copyTermSelection() {
+      if (selectMode) {
+        const sel = window.getSelection && window.getSelection().toString();
+        if (sel) {
+          navigator.clipboard.writeText(sel).then(() => setStatus('COPIED', 'var(--text)'))
+            .catch(() => setStatus('COPY FAIL', 'var(--red)'));
+          return;
+        }
+        copySelectModeAll();
+        return;
+      }
       if (!term) return;
       const sel = term.getSelection();
       if (!sel) {
-        setStatus('NO SELECTION', 'var(--amber)');
+        setStatus('NO SELECTION — try [SELECT_TEXT]', 'var(--amber)');
         return;
       }
       navigator.clipboard.writeText(sel).then(() => {
         setStatus('COPIED', 'var(--text)');
       }).catch(() => {
-        // fallback
         const ta = document.createElement('textarea');
         ta.value = sel;
         document.body.appendChild(ta);
@@ -540,11 +694,26 @@
       ws.onopen = () => { setStatus('PTY ONLINE', 'var(--text)'); sendResize(); };
       ws.onmessage = (ev) => {
         let msg;
-        try { msg = JSON.parse(ev.data); } catch (e) { term.write(ev.data); return; }
-        if (msg.type === 'stdout') term.write(msg.data || '');
-        else if (msg.type === 'ready') term.writeln('\x1b[32m[PTY ready]\x1b[0m');
-        else if (msg.type === 'error') { term.writeln('\x1b[31m[error] ' + (msg.data || '') + '\x1b[0m'); setStatus('ERROR', 'var(--red)'); }
-        else if (msg.type === 'exit') { term.writeln('\r\n\x1b[90m[exit ' + msg.exitCode + ']\x1b[0m'); setStatus('EXITED', 'var(--amber)'); }
+        try { msg = JSON.parse(ev.data); } catch (e) {
+          term.write(ev.data);
+          appendTranscript(stripAnsi(ev.data));
+          return;
+        }
+        if (msg.type === 'stdout') {
+          term.write(msg.data || '');
+          appendTranscript(stripAnsi(msg.data || ''));
+        } else if (msg.type === 'ready') {
+          term.writeln('\x1b[32m[PTY ready]\x1b[0m');
+          appendTranscript('[PTY ready]\n');
+        } else if (msg.type === 'error') {
+          term.writeln('\x1b[31m[error] ' + (msg.data || '') + '\x1b[0m');
+          appendTranscript('[error] ' + stripAnsi(msg.data || '') + '\n');
+          setStatus('ERROR', 'var(--red)');
+        } else if (msg.type === 'exit') {
+          term.writeln('\r\n\x1b[90m[exit ' + msg.exitCode + ']\x1b[0m');
+          appendTranscript('\n[exit ' + msg.exitCode + ']\n');
+          setStatus('EXITED', 'var(--amber)');
+        }
       };
       ws.onclose = () => {
         setStatus('DISCONNECTED', 'var(--red)');
@@ -561,10 +730,18 @@
         const msg = JSON.parse(e.data);
         const logs = document.getElementById('terminalLogs');
         if (msg.type === 'stdout' || msg.type === 'stderr' || msg.type === 'banner' || msg.type === 'exec_end') {
-          logs.textContent += (msg.data || '');
+          const clean = stripAnsi(msg.data || '');
+          logs.textContent += clean;
+          appendTranscript(clean);
           logs.scrollTop = logs.scrollHeight;
-        } else if (msg.type === 'clear') logs.textContent = '';
-        else if (msg.type === 'error') logs.textContent += '\n[ERROR] ' + msg.data + '\n';
+        } else if (msg.type === 'clear') {
+          logs.textContent = '';
+          termTranscript = '';
+        } else if (msg.type === 'error') {
+          const clean = stripAnsi(msg.data || '');
+          logs.textContent += '\n[ERROR] ' + clean + '\n';
+          appendTranscript('\n[ERROR] ' + clean + '\n');
+        }
       };
       ws.onclose = () => {
         setStatus('DISCONNECTED', 'var(--red)');
@@ -737,7 +914,31 @@
         });
         const d = await r.json();
         log.className = 'log-box ' + (d.success ? 'ok' : 'err');
-        log.textContent = (d.success ? 'MOUNTED\n' : 'MOUNT FAILED\n') + (d.output || JSON.stringify(d));
+        let text = (d.success ? 'MOUNTED\n' : 'MOUNT RESULT\n') +
+          (d.hint ? d.hint + '\n\n' : '') +
+          (d.authUrls && d.authUrls.length ? 'Auth URLs:\n' + d.authUrls.join('\n') + '\n\n' : '') +
+          (d.output || JSON.stringify(d, null, 2));
+        log.textContent = text;
+        // clickable links
+        if (d.authUrls && d.authUrls.length) {
+          log.innerHTML = '';
+          const pre = document.createElement('div');
+          pre.style.whiteSpace = 'pre-wrap';
+          pre.textContent = (d.success ? 'MOUNTED\n' : 'Waiting / result\n') +
+            (d.hint || '') + '\n\nOpen & confirm, server sends Enter automatically.\n\n';
+          log.appendChild(pre);
+          d.authUrls.forEach(u => {
+            const a = document.createElement('a');
+            a.href = u; a.target = '_blank'; a.rel = 'noopener';
+            a.style.color = 'var(--cyan)'; a.textContent = u;
+            log.appendChild(a);
+            log.appendChild(document.createElement('br'));
+          });
+          const tail = document.createElement('pre');
+          tail.style.cssText = 'white-space:pre-wrap;margin-top:8px;color:#8892b0;';
+          tail.textContent = d.output || '';
+          log.appendChild(tail);
+        }
       } catch (e) {
         log.className = 'log-box err';
         log.textContent = e.message;
