@@ -924,6 +924,60 @@ app.post('/api/notebooks/run', checkApiKey, async (req, res) => {
   });
 });
 
+
+app.get('/api/notebooks/open-url', checkApiKey, async (req, res) => {
+  const session = req.query.session;
+  const nbPath = req.query.path;
+  if (!session) return res.status(400).json({ error: 'session required' });
+
+  // Session Colab UI URL
+  const urlRes = await runCommand('colab', ['url', '-s', session], null, 15000);
+  const sessionUrl = (urlRes.stdout || '').trim().split('\n').map(s => s.trim()).find(s => /^https?:\/\//i.test(s)) || (urlRes.stdout || '').trim();
+
+  let driveFileId = null;
+  let notebookUrl = null;
+  if (nbPath) {
+    const idPy = [
+      'import os, subprocess, json',
+      'p = ' + JSON.stringify(nbPath),
+      'fid = None',
+      'try:',
+      '    fid = subprocess.check_output(["xattr", "-p", "user.drive.id", p], text=True, stderr=subprocess.DEVNULL).strip()',
+      'except Exception:',
+      '    try:',
+      '        # FUSE sometimes stores id in extended attrs differently',
+      '        out = subprocess.check_output(["getfattr", "-n", "user.drive.id", "--only-values", p], text=True, stderr=subprocess.DEVNULL).strip()',
+      '        fid = out or None',
+      '    except Exception:',
+      '        fid = None',
+      'print(json.dumps({"path": p, "exists": os.path.isfile(p), "driveFileId": fid}))',
+    ].join('\n');
+    const idRes = await runCommand('colab', ['exec', '-s', session], idPy, 30000);
+    const raw = (idRes.stdout || '').trim();
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const j = JSON.parse(lines[i]);
+        if (j.driveFileId) {
+          driveFileId = j.driveFileId;
+          notebookUrl = 'https://colab.research.google.com/drive/' + j.driveFileId;
+        }
+        break;
+      } catch (e) {}
+    }
+  }
+
+  res.json({
+    success: Boolean(sessionUrl || notebookUrl),
+    sessionUrl: sessionUrl || null,
+    notebookUrl,
+    driveFileId,
+    hint: notebookUrl
+      ? 'Open notebookUrl for full interactive UI (widgets, buttons, inputs).'
+      : 'Open sessionUrl, then open your .ipynb from the left file browser / Drive.'
+  });
+});
+
 app.post('/api/install', checkApiKey, async (req, res) => {
   const { session, packages } = req.body;
   if (!packages) return res.status(400).json({ error: 'packages list is required' });
