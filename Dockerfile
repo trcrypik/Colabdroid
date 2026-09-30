@@ -1,4 +1,4 @@
-# Colab CLI backend — Python 3.12 (required by google-colab-cli) + Node 20
+# Colab CLI backend — Python 3.12 + Node 20 + node-pty (real terminal)
 FROM python:3.12-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -9,19 +9,20 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/data \
     REQUIRE_API_KEY=1
 
-# System deps + Node.js 20
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     gnupg \
     git \
     procps \
+    python3-dev \
+    make \
+    g++ \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
     && node -v && npm -v && python3 --version
 
-# Google Colab CLI (must be on Python >= 3.12)
 RUN pip install --no-cache-dir google-colab-cli \
     && colab version
 
@@ -34,7 +35,6 @@ COPY . .
 RUN chmod +x colab_auth_helper.py \
     && mkdir -p /data/.config/colab-cli
 
-# Persist Colab auth + session metadata on a volume mounted at /data
 VOLUME ["/data"]
 
 EXPOSE 8080
