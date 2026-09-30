@@ -515,6 +515,41 @@ app.post('/api/files/upload', checkApiKey, upload.single('file'), async (req, re
   res.json({ success: result.success, remotePath, output: result.stdout || result.stderr });
 });
 
+
+/** Extract usable Google Drive OAuth URLs from CLI text (skip truncated "..."). */
+function extractDriveAuthUrls(text) {
+  if (!text) return [];
+  const joined = String(text)
+    .replace(/\r/g, '')
+    .replace(/(https?:\/\/[^\n]+)\n([^\s\n][^\n]*)/g, '$1$2');
+
+  const found = [];
+  const re = /https?:\/\/[^\s"'<>\])]+/g;
+  let m;
+  while ((m = re.exec(joined)) !== null) {
+    let u = m[0];
+    u = u.replace(/[.,;:]+$/, '');
+    u = u.replace(/&amp;/g, '&');
+    if (!u || u.includes('...')) continue;
+    if (u.length < 48) continue;
+    found.push(u);
+  }
+
+  const score = (u) => {
+    let s = 0;
+    if (/accounts\.google\.com/i.test(u)) s += 50;
+    if (/oauth|authorize/i.test(u)) s += 30;
+    if (/authorize-for-drive|drive\.google|auth\/drive/i.test(u)) s += 20;
+    if (/colab\.research\.google\.com/i.test(u) && !/oauth|authorize/i.test(u)) s -= 40;
+    if (u.length > 120) s += 10;
+    return s;
+  };
+
+  const uniq = [...new Set(found)];
+  uniq.sort((a, b) => score(b) - score(a));
+  return uniq.filter((u) => score(u) >= 30);
+}
+
 // --- Google Drive mount (2-step: start → user auth in browser → confirm) ---
 // Colab drive.mount is inherently interactive; there is no fully browserless
 // consumer-account path. We never auto-send Enter before the user confirms.
@@ -557,25 +592,17 @@ app.post('/api/drivemount/start', checkApiKey, async (req, res) => {
   };
   driveMountJobs.set(jobId, job);
 
-  const urlRe = /https?:\/\/[^\s"'<>]+/g;
+  const refreshAuthUrls = () => {
+    const all = extractDriveAuthUrls(job.stdout + '\n' + job.stderr);
+    if (all.length) {
+      job.authUrls = all;
+      if (job.status === 'starting') job.status = 'waiting_auth';
+    }
+  };
+
   const onChunk = (s, which) => {
     if (which === 'out') job.stdout += s; else job.stderr += s;
-    const m = s.match(urlRe);
-    if (m) {
-      for (const u of m) {
-        if (!job.authUrls.includes(u) && /oauth|accounts\.google|authorize/i.test(u)) {
-          job.authUrls.push(u);
-        } else if (!job.authUrls.includes(u) && /http/i.test(u) && job.authUrls.length === 0) {
-          job.authUrls.push(u);
-        }
-      }
-      if (job.authUrls.length && job.status === 'starting') {
-        job.status = 'waiting_auth';
-      }
-    }
-    if (/Press Enter after/i.test(s) && job.status === 'starting') {
-      job.status = 'waiting_auth';
-    }
+    refreshAuthUrls();
   };
 
   proc.stdout.on('data', (d) => onChunk(d.toString(), 'out'));
@@ -592,13 +619,15 @@ app.post('/api/drivemount/start', checkApiKey, async (req, res) => {
     job.error = err.message;
   });
 
-  // Wait up to 120s for auth URL (Colab can be slow to print it)
-  const waitUntil = Date.now() + 120000;
+  // Wait up to 150s for a *full* OAuth URL (ignore truncated "..." log lines)
+  const waitUntil = Date.now() + 150000;
   while (Date.now() < waitUntil) {
-    if (job.authUrls.length || job.status === 'waiting_auth') break;
+    refreshAuthUrls();
+    if (job.authUrls.length > 0) break;
     if (job.status === 'error' || job.exitCode !== null) break;
     await new Promise((r) => setTimeout(r, 400));
   }
+  refreshAuthUrls();
 
   if (job.exitCode !== null && !job.authUrls.length) {
     driveMountJobs.delete(jobId);
@@ -606,18 +635,20 @@ app.post('/api/drivemount/start', checkApiKey, async (req, res) => {
       success: false,
       status: 'error',
       output: (job.stdout + '\n' + job.stderr).trim(),
-      error: job.error || 'drivemount exited before auth URL appeared'
+      error: job.error || 'drivemount exited before a full auth URL appeared'
     });
   }
 
   res.json({
     success: true,
     jobId,
-    status: job.status,
+    status: job.authUrls.length ? 'waiting_auth' : job.status,
     authUrls: job.authUrls,
     mountPath,
     output: (job.stdout + '\n' + job.stderr).trim(),
-    hint: '1) Open the auth URL and grant access. 2) Return here and press CONFIRM_MOUNT. Do not skip step 1.'
+    hint: job.authUrls.length
+      ? '1) Open the FULL accounts.google.com link. 2) Allow. 3) CONFIRM_MOUNT.'
+      : 'Full OAuth URL not seen yet — wait and retry START, or check status. Ignore truncated colab.research.google.com... lines.'
   });
 });
 
