@@ -7,7 +7,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const multer = require('multer');
-const url = require('url');
 
 let pty = null;
 try {
@@ -18,11 +17,12 @@ try {
 }
 
 const app = express();
+app.disable('x-powered-by');
 const server = http.createServer(app);
 
 // Two logical WS endpoints on one HTTP server via noServer + upgrade routing
-const wssExec = new WebSocket.Server({ noServer: true });
-const wssPty = new WebSocket.Server({ noServer: true });
+const wssExec = new WebSocket.Server({ noServer: true, maxPayload: 1024 * 1024 });
+const wssPty = new WebSocket.Server({ noServer: true, maxPayload: 1024 * 1024 });
 
 const PORT = process.env.PORT || 8080;
 const REQUIRE_API_KEY = process.env.REQUIRE_API_KEY !== '0';
@@ -159,19 +159,33 @@ const checkApiKey = (req, res, next) => {
     req.headers['x-api-key'] ||
     req.query.api_key ||
     (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
-  if (clientKey && clientKey === API_KEY) return next();
+  if (clientKey && safeEqual(String(clientKey), API_KEY)) return next();
   return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key (header x-api-key)' });
 };
 
+function parseQuery(reqUrl) {
+  try { return Object.fromEntries(new URL(reqUrl, 'http://localhost').searchParams); }
+  catch (e) { return {}; }
+}
+
 function checkWsApiKey(reqUrl) {
   if (!API_KEY) return true;
-  try {
-    const q = url.parse(reqUrl, true).query || {};
-    return q.api_key === API_KEY;
-  } catch (e) {
-    return false;
-  }
+  return safeEqual(String(parseQuery(reqUrl).api_key || ''), API_KEY);
 }
+
+// Session names go straight into CLI argv — never let them look like flags.
+const SESSION_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+const isValidSession = (s) => typeof s === 'string' && SESSION_RE.test(s);
+const BAD_SESSION = { error: 'invalid session name (letters, digits, _ . - ; max 64; must not start with - or .)' };
+
+app.use('/api', (req, res, next) => {
+  const cand = [req.query.session, req.body && req.body.session, req.body && req.body.name];
+  for (const v of cand) {
+    if (v !== undefined && v !== null && v !== '' && !isValidSession(v)) return res.status(400).json(BAD_SESSION);
+  }
+  next();
+});
+app.param('name', (req, res, next, val) => (isValidSession(val) ? next() : res.status(400).json(BAD_SESSION)));
 
 function runCommand(cmd, args = [], stdinData = null, timeoutMs = 60000) {
   return new Promise((resolve) => {
@@ -186,12 +200,14 @@ function runCommand(cmd, args = [], stdinData = null, timeoutMs = 60000) {
       timedOut = true;
       try { proc.kill('SIGKILL'); } catch (e) {}
     }, timeoutMs);
+    proc.stdin.on('error', () => {}); // EPIPE if the child exits early must not crash the server
     if (stdinData !== null) {
       proc.stdin.write(stdinData);
       proc.stdin.end();
     }
-    proc.stdout.on('data', (d) => { stdout += d.toString(); });
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    const MAX_OUT = 8 * 1024 * 1024;
+    proc.stdout.on('data', (d) => { if (stdout.length < MAX_OUT) stdout += d.toString(); });
+    proc.stderr.on('data', (d) => { if (stderr.length < MAX_OUT) stderr += d.toString(); });
     proc.on('close', (code) => {
       clearTimeout(timer);
       resolve({
@@ -217,10 +233,102 @@ function runCommand(cmd, args = [], stdinData = null, timeoutMs = 60000) {
   });
 }
 
+// --- SSH key for `colab ssh` ---
+// colab ssh derives the public key from the private one (ssh-keygen -y) and sends it to the
+// runtime on every connect, so nothing has to be installed on the VM by hand. RSA keys are
+// rejected by the CLI — keep ed25519/ecdsa.
+const SSH_KEY = process.env.SSH_KEY_PATH || path.join(os.homedir(), '.ssh', 'id_ed25519');
+const SSH_PUB = SSH_KEY + '.pub';
+const SSH_DIR = path.dirname(SSH_KEY);
+let sshKeyReady = null;
+let sshClientVersion = null;
+
+function ensureSshConfig() {
+  const cfg = path.join(SSH_DIR, 'config');
+  const MARK = '# colab-backend keepalive';
+  try {
+    const cur = fs.existsSync(cfg) ? fs.readFileSync(cfg, 'utf8') : '';
+    if (cur.includes(MARK)) return;
+    const sep = cur && !cur.endsWith('\n') ? '\n' : '';
+    fs.writeFileSync(
+      cfg,
+      cur + sep + MARK + '\nHost *\n  ServerAliveInterval 30\n  ServerAliveCountMax 4\n  TCPKeepAlive yes\n',
+      { mode: 0o600 }
+    );
+  } catch (e) {}
+}
+
+async function ensureSshKey({ force = false } = {}) {
+  try {
+    fs.mkdirSync(SSH_DIR, { recursive: true, mode: 0o700 });
+    try { fs.chmodSync(SSH_DIR, 0o700); } catch (e) {}
+    if (force) {
+      for (const f of [SSH_KEY, SSH_PUB]) { try { fs.unlinkSync(f); } catch (e) {} }
+    }
+    // Optional: keep one stable key across redeploys (raw PEM or base64 of it)
+    if (!fs.existsSync(SSH_KEY) && process.env.SSH_PRIVATE_KEY) {
+      let k = process.env.SSH_PRIVATE_KEY.trim();
+      if (!k.includes('PRIVATE KEY')) k = Buffer.from(k, 'base64').toString('utf8');
+      k = k.replace(/\\n/g, '\n');
+      if (!k.endsWith('\n')) k += '\n';
+      fs.writeFileSync(SSH_KEY, k, { mode: 0o600 });
+      console.log('[SSH] private key seeded from SSH_PRIVATE_KEY env');
+    }
+    if (!fs.existsSync(SSH_KEY)) {
+      const r = await runCommand('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', 'colab-backend', '-f', SSH_KEY], null, 15000);
+      if (!r.success) {
+        return { ok: false, error: 'ssh-keygen failed: ' + ((r.stderr || r.stdout || '').trim() || 'not found') + ' (install openssh-client)' };
+      }
+      console.log('[SSH] generated new ed25519 key at ' + SSH_KEY);
+    }
+    try { fs.chmodSync(SSH_KEY, 0o600); } catch (e) {}
+    if (!fs.existsSync(SSH_PUB)) {
+      const r = await runCommand('ssh-keygen', ['-y', '-f', SSH_KEY], null, 10000);
+      if (!r.success || !r.stdout.trim()) {
+        return { ok: false, error: 'cannot derive public key: ' + (r.stderr || '').trim() };
+      }
+      fs.writeFileSync(SSH_PUB, r.stdout.trim() + '\n', { mode: 0o644 });
+    }
+    ensureSshConfig();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+async function sshInfo() {
+  const ready = await sshKeyReady;
+  let publicKey = null;
+  let fingerprint = null;
+  try { publicKey = fs.readFileSync(SSH_PUB, 'utf8').trim(); } catch (e) {}
+  if (publicKey) {
+    const r = await runCommand('ssh-keygen', ['-lf', SSH_PUB], null, 5000);
+    if (r.success) fingerprint = r.stdout.trim();
+  }
+  return { ok: Boolean(ready.ok && publicKey), error: ready.error || null, keyPath: SSH_KEY, publicKey, fingerprint, sshClient: sshClientVersion };
+}
+
+sshKeyReady = ensureSshKey().then((r) => {
+  if (!r.ok) console.error('[SSH] key setup failed: ' + r.error);
+  return r;
+});
+runCommand('ssh', ['-V'], null, 5000).then((r) => {
+  sshClientVersion = (r.stderr || r.stdout || '').trim() || null;
+  if (!r.success && !sshClientVersion) console.error('[SSH] `ssh` client not found — colab ssh will not work (install openssh-client)');
+});
+
+let _verCache = { t: 0, v: null };
+async function getColabVersion() {
+  if (_verCache.v && Date.now() - _verCache.t < 60000) return _verCache.v;
+  const v = await runCommand('colab', ['version'], null, 5000);
+  if (v.success) _verCache = { t: Date.now(), v };
+  return v;
+}
+
 // --- REST ---
 
 app.get('/health', async (req, res) => {
-  const versionRes = await runCommand('colab', ['version'], null, 5000);
+  const versionRes = await getColabVersion();
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -233,15 +341,27 @@ app.get('/health', async (req, res) => {
     configDir: CONFIG_DIR,
     ptyAvailable: Boolean(pty),
     webTokenRequired: Boolean(WEB_TOKEN),
+    sshKeyPresent: fs.existsSync(SSH_PUB),
+    sshClient: sshClientVersion,
     endpoints: {
       lineExecWs: '/terminal?session=NAME&api_key=KEY',
-      realPtyWs: '/pty?session=NAME&api_key=KEY&cols=80&rows=24',
+      realPtyWs: '/pty?session=NAME&api_key=KEY&cols=80&rows=24&mode=ssh',
+      sshKey: '/api/ssh/key',
       webUi: WEB_TOKEN ? '/?token=WEB_TOKEN' : '/'
     },
     mode: pty
-      ? 'PTY (colab console) + line-exec fallback'
+      ? 'PTY (colab ssh) + line-exec fallback'
       : 'line-exec only (node-pty missing)'
   });
+});
+
+app.get('/api/ssh/key', checkApiKey, async (req, res) => {
+  res.json(await sshInfo());
+});
+
+app.post('/api/ssh/key/regenerate', checkApiKey, async (req, res) => {
+  sshKeyReady = ensureSshKey({ force: true });
+  res.json(await sshInfo());
 });
 
 app.get('/api/status', checkApiKey, async (req, res) => {
@@ -383,7 +503,7 @@ app.delete('/api/sessions', checkApiKey, async (req, res) => {
   }
 
   const results = [];
-  for (const name of names) {
+  for (const name of [...names].filter(isValidSession)) {
     const r = await runCommand('colab', ['stop', '-s', name], null, 45000);
     results.push({
       sessionName: name,
@@ -568,7 +688,7 @@ app.post('/api/files/upload', checkApiKey, upload.single('file'), async (req, re
   const session = req.body.session;
   let destDir = (req.body.path || '/content').replace(/\/$/, '');
   if (destDir.includes('..')) return res.status(400).json({ error: 'invalid path' });
-  const remotePath = destDir + '/' + req.file.originalname;
+  const remotePath = destDir + '/' + path.basename(req.file.originalname);
   const args = ['upload'];
   if (session) args.push('-s', session);
   args.push(req.file.path, remotePath);
@@ -1054,7 +1174,8 @@ app.post('/api/install', checkApiKey, async (req, res) => {
 // --- WebSocket upgrade router ---
 
 server.on('upgrade', (request, socket, head) => {
-  const { pathname } = url.parse(request.url);
+  let pathname = '';
+  try { pathname = new URL(request.url, 'http://localhost').pathname; } catch (e) { return socket.destroy(); }
   if (pathname === '/terminal') {
     wssExec.handleUpgrade(request, socket, head, (ws) => {
       wssExec.emit('connection', ws, request);
@@ -1070,12 +1191,17 @@ server.on('upgrade', (request, socket, head) => {
 
 // Line-exec WS (legacy / fallback)
 wssExec.on('connection', (ws, req) => {
+  trackAlive(ws);
   if (!checkWsApiKey(req.url)) {
     ws.send(JSON.stringify({ type: 'error', data: 'Unauthorized: Invalid API Key\r\n' }));
     return ws.close();
   }
-  const q = url.parse(req.url, true).query || {};
+  const q = parseQuery(req.url);
   const session = q.session || '';
+  if (session && !isValidSession(session)) {
+    ws.send(JSON.stringify({ type: 'error', data: 'Invalid session name\r\n' }));
+    return ws.close();
+  }
   let activeChild = null;
 
   ws.send(JSON.stringify({
@@ -1093,6 +1219,9 @@ wssExec.on('connection', (ws, req) => {
         const cmd = msg.command || '';
         const isBash = msg.isBash !== false;
         const targetSession = msg.session || session;
+        if (targetSession && !isValidSession(targetSession)) {
+          return ws.send(JSON.stringify({ type: 'error', data: 'Invalid session name\r\n' }));
+        }
         if (cmd === 'clear') return ws.send(JSON.stringify({ type: 'clear' }));
         let execCode = cmd;
         if (isBash) {
@@ -1137,33 +1266,108 @@ wssExec.on('connection', (ws, req) => {
   });
 });
 
-// Real PTY WS — colab console inside node-pty
-wssPty.on('connection', (ws, req) => {
-  if (!checkWsApiKey(req.url)) {
-    ws.send(JSON.stringify({ type: 'error', data: 'Unauthorized API key' }));
-    return ws.close();
+// ---- WS liveness: protocol-level ping/pong ----
+// Drops half-dead sockets (mobile network switch, sleeping tab) so their `colab ssh` child is
+// killed instead of lingering, and keeps reverse proxies from idling the connection out.
+function trackAlive(ws) {
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
+}
+setInterval(() => {
+  for (const wss of [wssPty, wssExec]) {
+    for (const client of wss.clients) {
+      if (client.isAlive === false) { try { client.terminate(); } catch (e) {} continue; }
+      client.isAlive = false;
+      try { client.ping(); } catch (e) {}
+    }
   }
-  if (!pty) {
-    ws.send(JSON.stringify({
-      type: 'error',
-      data: 'node-pty is not installed on this server. Rebuild Docker image with node-pty.'
-    }));
-    return ws.close();
-  }
+}, 20000).unref();
 
-  const q = url.parse(req.url, true).query || {};
+// ---- Real PTY WS: `colab ssh` (default) or legacy `colab console` inside node-pty ----
+const MAX_PTYS = Math.max(1, parseInt(process.env.MAX_PTYS, 10) || 8);
+const activePtys = new Set();
+const WS_HIGH_WATER = 1024 * 1024;
+const WS_LOW_WATER = 256 * 1024;
+const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+wssPty.on('connection', async (ws, req) => {
+  trackAlive(ws);
+  const send = (obj) => {
+    if (ws.readyState === WebSocket.OPEN) { try { ws.send(JSON.stringify(obj)); } catch (e) {} }
+  };
+  const fail = (msg) => {
+    send({ type: 'error', data: msg });
+    try { ws.close(1011, 'error'); } catch (e) {}
+  };
+
+  let term = null;
+  let cleaned = false;
+  let flushTimer = null;
+  let resumeTimer = null;
+  const pending = []; // messages that arrive while the key/spawn is still being prepared
+
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    if (flushTimer) clearTimeout(flushTimer);
+    if (resumeTimer) clearInterval(resumeTimer);
+    if (term) {
+      activePtys.delete(term);
+      try { term.kill(); } catch (e) {}
+    }
+  };
+  ws.on('close', cleanup);
+  ws.on('error', cleanup);
+
+  const handleMsg = (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch (e) {
+      try { term.write(raw.toString()); } catch (err) {}
+      return;
+    }
+    if (msg.type === 'stdin' && typeof msg.data === 'string') {
+      try { term.write(msg.data); } catch (e) {}
+    } else if (msg.type === 'resize') {
+      const c = parseInt(msg.cols, 10);
+      const r = parseInt(msg.rows, 10);
+      if (c > 0 && r > 0) {
+        try { term.resize(clamp(c, 1, 500), clamp(r, 1, 200)); } catch (e) {}
+      }
+    } else if (msg.type === 'ping') {
+      send({ type: 'pong' });
+    }
+  };
+  ws.on('message', (raw) => {
+    if (!term) { if (pending.length < 100) pending.push(raw); return; }
+    handleMsg(raw);
+  });
+
+  if (!checkWsApiKey(req.url)) return fail('Unauthorized API key');
+  if (!pty) return fail('node-pty is not installed on this server. Rebuild Docker image with node-pty.');
+  if (activePtys.size >= MAX_PTYS) return fail('Too many open terminals (max ' + MAX_PTYS + ')');
+
+  const q = parseQuery(req.url);
   const session = (q.session || '').trim();
-  let cols = Math.max(20, parseInt(q.cols, 10) || 80);
-  let rows = Math.max(5, parseInt(q.rows, 10) || 24);
-  // mode: console (default) | ssh
-  const mode = (q.mode || 'console').toLowerCase();
+  const mode = String(q.mode || 'ssh').toLowerCase() === 'console' ? 'console' : 'ssh';
+  const cols = clamp(parseInt(q.cols, 10) || 80, 20, 500);
+  const rows = clamp(parseInt(q.rows, 10) || 24, 5, 200);
 
-  const args = mode === 'ssh' ? ['ssh'] : ['console'];
+  if (session && !isValidSession(session)) return fail('Invalid session name');
+  // Bare `colab ssh` would create a NEW runtime when none exists — never do that implicitly.
+  if (mode === 'ssh' && !session) return fail('Select a session first (SESSIONS → [USE]).');
+
+  const args = [mode];
   if (session) args.push('-s', session);
+  if (mode === 'ssh') {
+    const key = await sshKeyReady;
+    if (!key.ok) return fail('SSH key is not ready: ' + key.error);
+    args.push('-i', SSH_KEY);
+  }
+  if (cleaned) return; // client left while we were waiting
 
-  console.log(`[PTY] spawn colab ${args.join(' ')} cols=${cols} rows=${rows}`);
-
-  let term;
+  console.log('[PTY] spawn colab ' + args.join(' ') + ' cols=' + cols + ' rows=' + rows);
   try {
     term = pty.spawn('colab', args, {
       name: 'xterm-256color',
@@ -1174,83 +1378,58 @@ wssPty.on('connection', (ws, req) => {
         ...process.env,
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
+        LANG: process.env.LANG || 'C.UTF-8',
         PYTHONUNBUFFERED: '1',
         HOME: process.env.HOME || os.homedir()
       }
     });
   } catch (err) {
-    ws.send(JSON.stringify({ type: 'error', data: 'Failed to spawn PTY: ' + err.message }));
-    return ws.close();
+    return fail('Failed to spawn PTY: ' + err.message);
   }
+  activePtys.add(term);
 
-  ws.send(JSON.stringify({
-    type: 'ready',
-    data: {
-      session: session || null,
-      mode,
-      cols,
-      rows,
-      pid: term.pid
+  send({ type: 'ready', data: { session: session || null, mode, cols, rows, pid: term.pid } });
+
+  // Coalesce tiny PTY chunks into one WS frame (≈8 ms) and apply backpressure to the PTY
+  // when the client can't keep up (slow mobile link + heavy output like pip/training logs).
+  let buf = '';
+  const flush = () => {
+    flushTimer = null;
+    if (!buf) return;
+    const data = buf;
+    buf = '';
+    send({ type: 'stdout', data });
+    if (!resumeTimer && ws.bufferedAmount > WS_HIGH_WATER) {
+      try { term.pause(); } catch (e) {}
+      resumeTimer = setInterval(() => {
+        if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount < WS_LOW_WATER) {
+          clearInterval(resumeTimer);
+          resumeTimer = null;
+          try { term.resume(); } catch (e) {}
+        }
+      }, 50);
     }
-  }));
-
-  // Keep WebSocket alive through proxies (Northflank / mobile) during long idle (gemini-cli thinking)
-  const keepAlive = setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) {
-      try { ws.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch (e) {}
-    }
-  }, 15000);
-
+  };
   term.onData((data) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      // binary-ish text stream for xterm
-      try {
-        ws.send(JSON.stringify({ type: 'stdout', data }));
-      } catch (e) {}
+    buf += data;
+    if (buf.length >= 32768) {
+      if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+      flush();
+    } else if (!flushTimer) {
+      flushTimer = setTimeout(flush, 8);
     }
   });
 
   term.onExit(({ exitCode, signal }) => {
-    console.log(`[PTY] exit code=${exitCode} signal=${signal}`);
-    if (ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({ type: 'exit', exitCode, signal }));
-      } catch (e) {}
-      try { ws.close(); } catch (e) {}
-    }
+    console.log('[PTY] exit code=' + exitCode + ' signal=' + signal);
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+    flush();
+    send({ type: 'exit', exitCode, signal });
+    activePtys.delete(term);
+    try { ws.close(1000, 'exit'); } catch (e) {}
   });
 
-  ws.on('message', (raw) => {
-    let msg;
-    try {
-      msg = JSON.parse(raw.toString());
-    } catch (e) {
-      // raw text → stdin
-      try { term.write(raw.toString()); } catch (err) {}
-      return;
-    }
-    if (msg.type === 'stdin' && typeof msg.data === 'string') {
-      try { term.write(msg.data); } catch (e) {}
-    } else if (msg.type === 'resize') {
-      const c = parseInt(msg.cols, 10);
-      const r = parseInt(msg.rows, 10);
-      if (c > 0 && r > 0) {
-        cols = c;
-        rows = r;
-        try { term.resize(cols, rows); } catch (e) {}
-      }
-    } else if (msg.type === 'ping') {
-      try { ws.send(JSON.stringify({ type: 'pong' })); } catch (e) {}
-    }
-  });
-
-  const cleanup = () => {
-    clearInterval(keepAlive);
-    try { term.kill(); } catch (e) {}
-  };
-
-  ws.on('close', cleanup);
-  ws.on('error', cleanup);
+  for (const m of pending.splice(0)) handleMsg(m);
 });
 
 server.listen(PORT, '0.0.0.0', () => {
@@ -1263,7 +1442,20 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('  node-pty:          ' + (pty ? 'YES' : 'NO'));
   console.log('  WEB_TOKEN gate:    ' + (WEB_TOKEN ? 'ON (open /?token=...)' : 'OFF'));
   console.log('  Line-exec WS:      /terminal?session=&api_key=');
-  console.log('  Real PTY WS:       /pty?session=&api_key=&cols=&rows=');
+  console.log('  Real PTY WS:       /pty?session=&api_key=&cols=&rows=&mode=ssh');
+  console.log('  SSH key:           ' + SSH_KEY);
   console.log('======================================================');
   console.log('');
 });
+
+function shutdown(sig) {
+  console.log('[COLAB-BACKEND] ' + sig + ' received, shutting down…');
+  for (const t of activePtys) { try { t.kill(); } catch (e) {} }
+  for (const j of driveMountJobs.values()) { try { j.kill && j.kill(); } catch (e) {} }
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+// Express 4 does not catch rejections from async handlers; one bad request must not kill every terminal.
+process.on('unhandledRejection', (e) => console.error('[COLAB-BACKEND] unhandledRejection:', e));
