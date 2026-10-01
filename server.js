@@ -314,11 +314,18 @@ app.get('/api/sessions', checkApiKey, async (req, res) => {
 });
 
 app.post('/api/sessions', checkApiKey, async (req, res) => {
-  const { name, gpu, tpu, highMem } = req.body;
+  let { name, gpu, tpu, highMem, accelerator } = req.body;
+  // UI may send accelerator like "TPU:v5e1" or "GPU:T4"
+  if (accelerator && typeof accelerator === 'string') {
+    const a = accelerator.trim();
+    if (/^TPU:/i.test(a)) { tpu = a.split(':')[1]; gpu = null; }
+    else if (/^GPU:/i.test(a)) { gpu = a.split(':')[1]; tpu = null; }
+    else if (a === 'NONE' || a === 'CPU') { gpu = null; tpu = null; }
+  }
   const sessionName = name || 'colab-' + Math.random().toString(16).substring(2, 8);
   const args = ['new', '-s', sessionName];
-  if (gpu && gpu !== 'NONE') args.push('--gpu', gpu);
-  else if (tpu && tpu !== 'NONE') args.push('--tpu', tpu);
+  if (tpu && tpu !== 'NONE') args.push('--tpu', String(tpu).toLowerCase());
+  else if (gpu && gpu !== 'NONE') args.push('--gpu', gpu);
   if (highMem) args.push('--high-mem');
   console.log(`[COLAB-BACKEND] Provisioning: colab ${args.join(' ')}`);
   const result = await runCommand('colab', args, null, 120000);
@@ -341,6 +348,61 @@ app.delete('/api/sessions/:name', checkApiKey, async (req, res) => {
   const sessionName = req.params.name;
   const result = await runCommand('colab', ['stop', '-s', sessionName], null, 30000);
   res.json({ sessionName, success: result.success, output: result.stdout || result.stderr });
+});
+
+/** Stop every session known to the CLI (account-wide on this token). */
+app.delete('/api/sessions', checkApiKey, async (req, res) => {
+  const cliRes = await runCommand('colab', ['sessions'], null, 20000);
+  const text = (cliRes.stdout || '') + '\n' + (cliRes.stderr || '');
+  const names = new Set();
+
+  // Parse common CLI table / list formats
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (!t || /^name\b/i.test(t) || /^session/i.test(t) || /^---/.test(t)) continue;
+    // first token often session name
+    const m = t.match(/^([A-Za-z0-9_.-]+)\b/);
+    if (m) {
+      const n = m[1];
+      if (!/^(cpu|gpu|tpu|idle|busy|active|status|running|true|false)$/i.test(n)) {
+        names.add(n);
+      }
+    }
+  }
+
+  // Also local cache
+  if (fs.existsSync(SESSIONS_FILE)) {
+    try {
+      const local = JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8'));
+      for (const v of Object.values(local)) {
+        if (v && v.name) names.add(v.name);
+        if (typeof v === 'string') names.add(v);
+      }
+      for (const k of Object.keys(local)) names.add(k);
+    } catch (e) {}
+  }
+
+  const results = [];
+  for (const name of names) {
+    const r = await runCommand('colab', ['stop', '-s', name], null, 45000);
+    results.push({
+      sessionName: name,
+      success: r.success,
+      output: (r.stdout || r.stderr || '').slice(0, 500)
+    });
+  }
+
+  // Final sweep: sometimes CLI accepts stop without -s for default
+  const again = await runCommand('colab', ['sessions'], null, 15000);
+
+  res.json({
+    success: results.every((x) => x.success) || results.length > 0,
+    stopped: results.filter((x) => x.success).map((x) => x.sessionName),
+    failed: results.filter((x) => !x.success),
+    results,
+    sessionsAfter: again.stdout || again.stderr,
+    parsedNames: [...names]
+  });
 });
 
 app.post('/api/sessions/:name/restart', checkApiKey, async (req, res) => {
@@ -1132,6 +1194,13 @@ wssPty.on('connection', (ws, req) => {
     }
   }));
 
+  // Keep WebSocket alive through proxies (Northflank / mobile) during long idle (gemini-cli thinking)
+  const keepAlive = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch (e) {}
+    }
+  }, 15000);
+
   term.onData((data) => {
     if (ws.readyState === WebSocket.OPEN) {
       // binary-ish text stream for xterm
@@ -1175,13 +1244,13 @@ wssPty.on('connection', (ws, req) => {
     }
   });
 
-  ws.on('close', () => {
+  const cleanup = () => {
+    clearInterval(keepAlive);
     try { term.kill(); } catch (e) {}
-  });
+  };
 
-  ws.on('error', () => {
-    try { term.kill(); } catch (e) {}
-  });
+  ws.on('close', cleanup);
+  ws.on('error', cleanup);
 });
 
 server.listen(PORT, '0.0.0.0', () => {
