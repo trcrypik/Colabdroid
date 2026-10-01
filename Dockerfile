@@ -9,31 +9,44 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/data \
     REQUIRE_API_KEY=1
 
+# Установка системных зависимостей:
+# - openssh-client: необходим для ssh-keygen и работы команды colab ssh
+# - python3-dev, make, g++: сборка нативного модуля node-pty под Node 20
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     gnupg \
     git \
     procps \
+    openssh-client \
     python3-dev \
     make \
     g++ \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
-    && node -v && npm -v && python3 --version
+    && node -v && npm -v && python3 --version && ssh -V
 
+# Системная конфигурация SSH для автоматического принятия ключей инстансов Colab
+RUN mkdir -p /etc/ssh/ssh_config.d && \
+    printf "Host *\n  StrictHostKeyChecking accept-new\n  ServerAliveInterval 30\n  ServerAliveCountMax 4\n  TCPKeepAlive yes\n" > /etc/ssh/ssh_config.d/99-colab.conf
+
+# Установка официальной CLI-утилиты Colab
 RUN pip install --no-cache-dir google-colab-cli \
     && colab version
 
 WORKDIR /app
 
+# Копирование манифестов и компиляция зависимостей с открытым выводом ошибок
 COPY package*.json ./
-RUN npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+RUN npm ci --omit=dev || npm install --omit=dev
 
 COPY . .
+
+# Подготовка прав и рабочей директории
 RUN chmod +x colab_auth_helper.py \
-    && mkdir -p /data/.config/colab-cli
+    && mkdir -p /data/.config/colab-cli /data/.ssh \
+    && chmod 700 /data/.ssh
 
 VOLUME ["/data"]
 
