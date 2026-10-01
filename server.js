@@ -187,6 +187,32 @@ app.use('/api', (req, res, next) => {
 });
 app.param('name', (req, res, next, val) => (isValidSession(val) ? next() : res.status(400).json(BAD_SESSION)));
 
+// --- Interactive CLI auth ---
+// When a `colab ...` command is not logged in it prints a Google OAuth URL and then blocks on
+// "Enter the authorization code:". runCommand() notices that prompt, parks the process here and
+// lets the web UI fetch the URL (GET /api/auth/pending) and feed the code back to the process's
+// stdin (POST /api/auth/pending/code). The original HTTP request just keeps waiting meanwhile.
+const pendingAuths = new Map();
+let pendingAuthSeq = 0;
+const AUTH_WAIT_MS = 10 * 60 * 1000;
+const AUTH_PROMPT_RE = /(authori[sz]ation|verification) code[^\n:>?]{0,60}[:>?]/gi; // note: piped input() prompts are not newline-separated
+const stripAnsi = (t) => t.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+
+// prompts are counted per stream (prompt -> stdout, URL -> stderr is the usual split)
+function promptInfo(t) {
+  const clean = stripAnsi(t);
+  const n = (clean.match(AUTH_PROMPT_RE) || []).length;
+  const tail = clean.trimEnd().slice(-120);
+  const m = tail.match(AUTH_PROMPT_RE);
+  return { n, atPrompt: Boolean(m) && tail.endsWith(m[m.length - 1]) };
+}
+
+function extractAuthUrl(text) {
+  const urls = (text.match(/https:\/\/[^\s"'<>]+/g) || []).map((u) => u.replace(/[.,;)\]]+$/, ''));
+  const oauth = urls.filter((u) => /accounts\.google\.com|oauth|authorize/i.test(u));
+  return (oauth.length ? oauth : urls).pop() || null; // last one wins if the CLI re-prints it
+}
+
 function runCommand(cmd, args = [], stdinData = null, timeoutMs = 60000) {
   return new Promise((resolve) => {
     const startTime = Date.now();
@@ -196,20 +222,65 @@ function runCommand(cmd, args = [], stdinData = null, timeoutMs = 60000) {
     let stdout = '';
     let stderr = '';
     let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      try { proc.kill('SIGKILL'); } catch (e) {}
-    }, timeoutMs);
+    let timer = null;
+    const armTimer = (ms) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timedOut = true;
+        try { proc.kill('SIGKILL'); } catch (e) {}
+      }, ms);
+    };
+    armTimer(timeoutMs);
     proc.stdin.on('error', () => {}); // EPIPE if the child exits early must not crash the server
     if (stdinData !== null) {
       proc.stdin.write(stdinData);
       proc.stdin.end();
     }
+
+    // Only plain `colab` commands run with an open stdin can ask for an authorization code.
+    const canAuth = cmd === 'colab' && stdinData === null;
+    let authEntry = null;
+    let promptCount = 0;
+    const scanForAuth = () => {
+      if (!canAuth || stdout.length + stderr.length > 200000) return;
+      const so = promptInfo(stdout);
+      const se = promptInfo(stderr);
+      promptCount = so.n + se.n;
+      const atPrompt = so.atPrompt || se.atPrompt;
+      if (!authEntry) {
+        if (!atPrompt || promptCount === 0) return;
+        authEntry = {
+          id: String(++pendingAuthSeq),
+          command: (cmd + ' ' + args.join(' ')).slice(0, 120),
+          url: null,
+          awaiting: false,
+          started: Date.now(),
+          handled: 0, // prompts already answered
+          submit(code) {
+            if (!this.awaiting) return false;
+            try { proc.stdin.write(code + '\n'); } catch (e) { return false; }
+            this.awaiting = false;
+            this.handled = promptCount;
+            armTimer(timeoutMs); // normal time budget for whatever the command does after login
+            return true;
+          }
+        };
+        pendingAuths.set(authEntry.id, authEntry);
+      }
+      authEntry.url = extractAuthUrl(stripAnsi(stdout + '\n' + stderr)) || authEntry.url;
+      // A prompt we haven't answered yet (first one, or a re-prompt after a wrong code).
+      if (atPrompt && promptCount > authEntry.handled && !authEntry.awaiting) {
+        authEntry.awaiting = true;
+        armTimer(AUTH_WAIT_MS); // give the human time to open the link and copy the code
+      }
+    };
+
     const MAX_OUT = 8 * 1024 * 1024;
-    proc.stdout.on('data', (d) => { if (stdout.length < MAX_OUT) stdout += d.toString(); });
-    proc.stderr.on('data', (d) => { if (stderr.length < MAX_OUT) stderr += d.toString(); });
+    proc.stdout.on('data', (d) => { if (stdout.length < MAX_OUT) stdout += d.toString(); scanForAuth(); });
+    proc.stderr.on('data', (d) => { if (stderr.length < MAX_OUT) stderr += d.toString(); scanForAuth(); });
     proc.on('close', (code) => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
+      if (authEntry) pendingAuths.delete(authEntry.id);
       resolve({
         success: code === 0 && !timedOut,
         code,
@@ -220,7 +291,8 @@ function runCommand(cmd, args = [], stdinData = null, timeoutMs = 60000) {
       });
     });
     proc.on('error', (err) => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
+      if (authEntry) pendingAuths.delete(authEntry.id);
       resolve({
         success: false,
         code: -1,
@@ -402,6 +474,30 @@ app.post('/api/auth/code', checkApiKey, async (req, res) => {
   const result = await runCommand('python3', [HELPER_SCRIPT, 'exchange-code', code.trim()], null, 15000);
   try { res.json(JSON.parse(result.stdout.trim())); }
   catch (e) { res.status(500).json({ error: 'Failed to exchange code', details: result.stderr }); }
+});
+
+// A running `colab ...` command is blocked on "Enter the authorization code:" — expose it to the UI.
+app.get('/api/auth/pending', checkApiKey, (req, res) => {
+  const pending = [...pendingAuths.values()]
+    .filter((e) => e.awaiting)
+    .map((e) => ({ id: e.id, command: e.command, url: e.url, ageSec: Math.round((Date.now() - e.started) / 1000) }));
+  res.json({ pending });
+});
+
+app.post('/api/auth/pending/code', checkApiKey, (req, res) => {
+  let code = String((req.body && req.body.code) || '').trim();
+  // Accept the whole redirect URL too (…?code=4/0AX…&scope=…)
+  const m = code.match(/[?&]code=([^&\s]+)/);
+  if (m) { try { code = decodeURIComponent(m[1]); } catch (e) { code = m[1]; } }
+  if (!code) return res.status(400).json({ error: 'Authorization code is required' });
+  if (code.length > 512 || /[\r\n]/.test(code)) return res.status(400).json({ error: 'Invalid authorization code' });
+  const id = req.body && req.body.id ? String(req.body.id) : null;
+  const waiting = [...pendingAuths.values()].filter((e) => e.awaiting);
+  const entry = id ? pendingAuths.get(id) : waiting[waiting.length - 1];
+  if (!entry || !entry.awaiting) {
+    return res.status(404).json({ error: 'No command is waiting for a code right now (timed out or already submitted)' });
+  }
+  res.json({ success: entry.submit(code) });
 });
 
 app.post('/api/auth/token', checkApiKey, async (req, res) => {
