@@ -245,10 +245,12 @@
             <label class="stat-label">ACCELERATOR</label>
             <select id="newSessGpu">
               <option value="NONE">CPU</option>
-              <option value="T4" selected>GPU T4</option>
-              <option value="L4">GPU L4</option>
-              <option value="A100">GPU A100</option>
-              <option value="H100">GPU H100</option>
+              <option value="GPU:T4" selected>GPU T4</option>
+              <option value="GPU:L4">GPU L4</option>
+              <option value="GPU:A100">GPU A100</option>
+              <option value="GPU:H100">GPU H100</option>
+              <option value="TPU:v5e1">TPU v5e-1 (v5e1)</option>
+              <option value="TPU:v6e1">TPU v6e-1 (v6e1)</option>
             </select>
           </div>
           <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
@@ -257,6 +259,7 @@
             </label>
             <button class="btn btn-cyan" id="btnCreateSess" type="button" onclick="createSession()">[CREATE]</button>
             <button class="btn" type="button" onclick="loadSessions()">[REFRESH]</button>
+            <button class="btn btn-danger" type="button" onclick="closeAllSessions()">[CLOSE_ALL]</button>
           </div>
         </div>
         <div class="stat-label">SERVER RESPONSE</div>
@@ -685,6 +688,7 @@
     }
     function disconnectTerm() {
       if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+      if (window._ptyPingTimer) { clearInterval(window._ptyPingTimer); window._ptyPingTimer = null; }
       if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; }
       setStatus('OFFLINE', 'var(--red)');
     }
@@ -700,13 +704,25 @@
       setStatus('CONNECTING…', 'var(--amber)');
       term.writeln('\x1b[90mPTY ' + wurl.replace(/api_key=[^&]+/, 'api_key=***') + '\x1b[0m');
       ws = new WebSocket(wurl);
-      ws.onopen = () => { setStatus('PTY ONLINE', 'var(--text)'); sendResize(); };
+      ws.onopen = () => {
+        setStatus('PTY ONLINE', 'var(--text)');
+        sendResize();
+        if (window._ptyPingTimer) clearInterval(window._ptyPingTimer);
+        window._ptyPingTimer = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            try { ws.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch (e) {}
+          }
+        }, 12000);
+      };
       ws.onmessage = (ev) => {
         let msg;
         try { msg = JSON.parse(ev.data); } catch (e) {
           term.write(ev.data);
           appendTranscript(stripAnsi(ev.data));
           return;
+        }
+        if (msg.type === 'ping' || msg.type === 'pong') {
+          return; // keepalive — do not print
         }
         if (msg.type === 'stdout') {
           term.write(msg.data || '');
@@ -726,7 +742,11 @@
       };
       ws.onclose = () => {
         setStatus('DISCONNECTED', 'var(--red)');
-        wsRetryTimer = setTimeout(() => { if (termMode === 'pty') connectPty(); }, 4000);
+        if (window._ptyPingTimer) { clearInterval(window._ptyPingTimer); window._ptyPingTimer = null; }
+        // Longer delay; skip if tab hidden (mobile background)
+        wsRetryTimer = setTimeout(() => {
+          if (termMode === 'pty' && !document.hidden) connectPty();
+        }, 8000);
       };
       ws.onerror = () => setStatus('WS ERROR', 'var(--red)');
     }
@@ -849,16 +869,16 @@
       const btn = document.getElementById('btnCreateSess');
       const log = document.getElementById('sessionCreateLog');
       const name = document.getElementById('newSessName').value.trim();
-      const gpu = document.getElementById('newSessGpu').value;
+      const accelerator = document.getElementById('newSessGpu').value;
       const highMem = document.getElementById('newSessHighMem').checked;
       btn.disabled = true;
       log.className = 'log-box';
-      log.textContent = 'Creating session… (colab new may take up to ~2 min)\n';
+      log.textContent = 'Creating session… accelerator=' + accelerator + ' (may take up to ~2 min)\n';
       try {
         const r = await apiFetch('/api/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name || undefined, gpu, highMem })
+          body: JSON.stringify({ name: name || undefined, accelerator, highMem })
         });
         const d = await r.json();
         const ok = !!d.success;
@@ -902,6 +922,32 @@
         reconnectTerm();
       }
       loadSessions();
+    }
+
+
+    async function closeAllSessions() {
+      if (!confirm('Stop ALL Colab sessions on this account?')) return;
+      const log = document.getElementById('sessionCreateLog');
+      log.className = 'log-box';
+      log.textContent = 'Stopping all sessions…\n';
+      try {
+        const r = await apiFetch('/api/sessions', { method: 'DELETE' });
+        const d = await r.json();
+        log.className = 'log-box ' + (d.success ? 'ok' : 'err');
+        log.textContent =
+          'CLOSE ALL\n' +
+          'stopped: ' + ((d.stopped || []).join(', ') || '—') + '\n' +
+          'failed: ' + JSON.stringify(d.failed || []) + '\n\n' +
+          (d.sessionsAfter || '');
+        activeSession = '';
+        localStorage.removeItem('colab_active_session');
+        updateSessionLabel();
+        disconnectTerm();
+        loadSessions();
+      } catch (e) {
+        log.className = 'log-box err';
+        log.textContent = e.message;
+      }
     }
 
     let driveMountJobId = localStorage.getItem('colab_drive_job') || null;
