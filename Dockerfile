@@ -7,8 +7,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PORT=8080 \
     COLAB_HOME=/data \
     HOME=/data \
-    REQUIRE_API_KEY=1
+    REQUIRE_API_KEY=1 \
+    PTY_KEEP_MS=7200000
 
+# PTY_KEEP_MS: сколько мс живёт шелл после обрыва WebSocket (переоткрытие страницы/APK подключается к нему заново).
 # Установка системных зависимостей:
 # - openssh-client: необходим для ssh-keygen и работы команды colab ssh
 # - python3-dev, make, g++: сборка нативного модуля node-pty под Node 20
