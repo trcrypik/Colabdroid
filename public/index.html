@@ -171,11 +171,315 @@
     }
     .nb-item .path { color: #8892b0; font-size: 11px; word-break: break-all; }
     .hint { color: #666; font-size: 11px; }
+    .auth-banner { flex-shrink: 0; max-height: 75%; overflow-y: auto; border-color: var(--amber); box-shadow: 0 0 12px rgba(255,176,0,0.25); }
+    .auth-banner { position: relative; }
+    .auth-banner .card-title { color: var(--amber); padding-right: 34px; }
+    .auth-close { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0; line-height: 1; font-size: 14px; background: transparent; color: var(--amber); border: 1px solid var(--amber); border-radius: 3px; cursor: pointer; }
+    .auth-close:hover { background: rgba(255,176,0,0.2); }
+    .auth-banner .link-row { display: flex; gap: 8px; }
+    .auth-banner .link-row input { flex: 1; min-width: 0; color: var(--cyan); }
+    a.btn { text-decoration: none; display: inline-block; }
+
+    /* Floating Virtual Arrows Keypad */
+    .arrows-pad {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 204px;
+      background: rgba(13, 18, 29, 0.96);
+      border: 1px solid rgba(0, 240, 255, 0.45);
+      border-radius: 6px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 240, 255, 0.22);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 9998;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+      touch-action: none;
+    }
+    .arrows-pad-header {
+      background: #090d14;
+      border-bottom: 1px solid var(--border);
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: grab;
+      touch-action: none;
+    }
+    .arrows-pad-header:active {
+      cursor: grabbing;
+    }
+    .arrows-pad-title {
+      font-size: 11px;
+      font-weight: bold;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+    }
+    .arrows-pad-title .drag-icon {
+      color: #8892b0;
+      font-size: 10px;
+    }
+    .arrows-pad-close {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--red);
+      font-size: 13px;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .arrows-pad-close:hover {
+      background: rgba(255, 51, 102, 0.25);
+      border-color: var(--red);
+    }
+    .arrows-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 8px;
+      background: #06080d;
+    }
+    .pad-key {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: #d1d5db;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: bold;
+      height: 44px;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.1s ease;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .pad-key:focus, .pad-key:focus-visible { outline: none; }
+    @media (hover: hover) and (pointer: fine) {
+      .pad-key:hover {
+        border-color: var(--cyan);
+        color: #ffffff;
+        background: rgba(0, 240, 255, 0.12);
+      }
+    }
+    .pad-key:active {
+      transform: scale(0.92);
+      background: rgba(0, 255, 102, 0.25);
+      border-color: var(--text);
+      box-shadow: 0 0 10px rgba(0, 255, 102, 0.4);
+    }
+    .pad-key.key-arrow {
+      font-size: 17px;
+      color: var(--cyan);
+      text-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
+    }
+    .pad-key.key-enter {
+      background: rgba(0, 255, 102, 0.08);
+      border-color: rgba(0, 255, 102, 0.4);
+      color: var(--text);
+    }
+    .pad-key.key-enter .key-sym-circle {
+      font-size: 16px;
+      line-height: 1;
+      color: var(--text);
+      text-shadow: 0 0 8px rgba(0, 255, 102, 0.6);
+    }
+    .pad-key.key-enter .key-subtext {
+      font-size: 8px;
+      letter-spacing: 0.5px;
+      line-height: 1;
+      margin-top: 2px;
+      opacity: 0.85;
+      color: var(--text);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .pad-key.key-enter:hover {
+        background: rgba(0, 255, 102, 0.22);
+        border-color: var(--text);
+        box-shadow: 0 0 10px rgba(0, 255, 102, 0.4);
+      }
+    }
+    .pad-key.key-esc {
+      color: #ff8aa8;
+      font-size: 12px;
+      border-color: rgba(255, 51, 102, 0.35);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .pad-key.key-esc:hover { border-color: var(--red); background: rgba(255, 51, 102, 0.18); color: #fff; }
+    }
+    .pad-key.key-f10 {
+      color: var(--amber);
+      font-size: 12px;
+      border-color: rgba(255, 176, 0, 0.35);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .pad-key.key-f10:hover { border-color: var(--amber); background: rgba(255, 176, 0, 0.18); color: #fff; }
+    }
+    .pad-key.key-mod {
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      position: relative;
+    }
+    .pad-key.key-mod .key-mod-led {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #232f42;
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      transition: all 0.15s ease;
+    }
+    .pad-key.key-mod.active-latched {
+      background: rgba(0, 240, 255, 0.24) !important;
+      border-color: var(--cyan) !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.55), inset 0 0 8px rgba(0, 240, 255, 0.3) !important;
+      text-shadow: 0 0 6px var(--cyan) !important;
+    }
+    .pad-key.key-mod.active-latched .key-mod-led {
+      background: var(--cyan) !important;
+      box-shadow: 0 0 8px var(--cyan) !important;
+    }
+
+    /* External link / auth modal window */
+    .ext-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 6, 10, 0.82);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .ext-modal-window {
+      width: 90vw;
+      height: 90vh;
+      max-width: 1400px;
+      max-height: 920px;
+      background: var(--card-bg);
+      border: 1px solid var(--cyan);
+      border-radius: 4px;
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.25), 0 20px 60px rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: extModalFadeIn 0.15s ease-out;
+    }
+    @keyframes extModalFadeIn {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @media (max-width: 768px) {
+      .ext-modal-backdrop {
+        padding: 6px;
+      }
+      .ext-modal-window {
+        width: 96vw;
+        height: 94vh;
+      }
+    }
+    .ext-modal-header {
+      flex-shrink: 0;
+      background: #090d14;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .ext-modal-title {
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .ext-modal-url {
+      color: #8892b0;
+      font-size: 11px;
+      font-weight: normal;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 45vw;
+    }
+    .ext-modal-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .ext-modal-close {
+      color: var(--red) !important;
+      border-color: rgba(255, 51, 102, 0.5) !important;
+      font-weight: bold;
+      padding: 4px 10px;
+      font-size: 13px;
+      line-height: 1.2;
+      cursor: pointer;
+    }
+    .ext-modal-close:hover {
+      background: rgba(255, 51, 102, 0.25) !important;
+      border-color: var(--red) !important;
+      box-shadow: 0 0 10px rgba(255, 51, 102, 0.4);
+    }
+    .ext-modal-notice {
+      background: #0d121d;
+      border-bottom: 1px solid rgba(255, 176, 0, 0.35);
+      color: var(--amber);
+      padding: 6px 12px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .ext-modal-body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background: #050608;
+    }
+    .ext-modal-fallback { padding: 20px; color: var(--text); font-size: 13px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+    .ext-modal-fallback textarea { width: 100%; background: #050608; color: var(--cyan); border: 1px solid var(--cyan); padding: 8px; font-family: inherit; font-size: 12px; word-break: break-all; resize: vertical; }
+    .ext-modal-iframe {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #ffffff;
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="brand"><span>[⚡]</span><span>COLAB CLI // REAL PTY</span></div>
+    <div class="brand"><span>[⚡]</span><span>COLAB CLI // SSH PTY</span></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <div id="authStatusBadge" class="status-badge">
         <span class="dot offline"></span><span id="authStatusText">AUTH CHECK</span>
@@ -183,7 +487,7 @@
       <div class="status-badge"><span style="color:var(--cyan);">SESSION:</span>
         <span id="currentSessionLabel">DEFAULT</span></div>
       <div class="status-badge"><span style="color:var(--cyan);">TERM:</span>
-        <span id="termModeLabel">PTY</span></div>
+        <span id="termModeLabel">SSH</span></div>
     </div>
   </header>
 
@@ -197,16 +501,43 @@
   </nav>
 
   <main>
+    <!-- GOOGLE AUTH PROMPT (shown when a colab command waits for "Enter the authorization code:") -->
+    <div id="authBanner" class="card auth-banner" style="display:none;">
+      <button class="auth-close" type="button" onclick="dismissAuthBanner()" title="Close" aria-label="Close">✕</button>
+      <div class="card-title">
+        <span>[!] GOOGLE AUTHORIZATION REQUIRED</span>
+        <span class="hint" id="authBannerCmd"></span>
+      </div>
+      <p class="hint">Open the link (or copy it and open it in any browser), sign in and allow access. Google then shows a code: paste it below.</p>
+      <label class="stat-label">STEP 1: LOGIN LINK</label>
+      <div class="link-row">
+        <input type="text" id="authBannerUrl" readonly onclick="this.select()" />
+      </div>
+      <div class="nb-actions">
+        <button class="btn btn-cyan" type="button" onclick="copyAuthLink()">[COPY_LINK]</button>
+        <a class="btn btn-cyan" id="authBannerOpen" href="#" target="_blank" rel="noopener">[OPEN_LINK]</a>
+      </div>
+      <label class="stat-label">STEP 2: PASTE CODE</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="authBannerCode" placeholder="4/0A..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();submitPendingAuth();}" />
+        <button class="btn" id="authBannerSubmit" type="button" onclick="submitPendingAuth()">[SUBMIT_CODE]</button>
+      </div>
+      <div id="authBannerMsg" class="hint"></div>
+    </div>
+
     <!-- TERMINAL -->
     <div id="tab-terminal" class="tab-content active">
       <div class="term-toolbar">
-        <button class="btn active-mode" id="btnModePty" type="button" onclick="setTermMode('pty')">[PTY/REAL_SHELL]</button>
+        <button class="btn active-mode" id="btnModePty" type="button" onclick="setTermMode('pty')">[SSH/REAL_SHELL]</button>
         <button class="btn" id="btnModeExec" type="button" onclick="setTermMode('exec')">[LINE-EXEC]</button>
         <button class="btn btn-cyan" type="button" onclick="reconnectTerm()">[RECONNECT]</button>
         <button class="btn btn-danger" type="button" onclick="disconnectTerm()">[DISCONNECT]</button>
-        <button class="btn" type="button" onclick="sendPtyEnter()" title="Send Enter to PTY (Drive OAuth)">[ENTER]</button>
+        <button class="btn btn-danger" type="button" onclick="killShell()" title="Kill the running shell on the server (a new one starts on RECONNECT)">[KILL_SHELL]</button>
+        <button class="btn btn-cyan" id="btnArrowsToggle" type="button" onclick="toggleArrowsPanel()" title="Toggle Virtual Arrow & Function Keypad">[KEYPAD]</button>
         <button class="btn" type="button" onclick="clearTerminal()">[CLEAR]</button>
         <button class="btn btn-cyan" type="button" onclick="toggleSelectMode()">[SELECT_TEXT]</button>
+        <label class="hint" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Optional: run NEW shells inside tmux (the server already keeps shells alive between reconnects)"><input type="checkbox" id="chkTmux" onchange="localStorage.setItem('colab_tmux', this.checked ? '1' : '0')"> tmux</label>
         <span class="hint">Mobile: [SELECT_TEXT] for selection handles. Drive mount: use NOTEBOOKS tab 2-step auth.</span>
       </div>
       <div id="selectModeBar" style="display:none;flex-shrink:0;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -216,7 +547,7 @@
       </div>
       <div class="terminal-container">
         <div class="terminal-header">
-          <span id="termHeaderTitle">PTY // colab console (xterm.js)</span>
+          <span id="termHeaderTitle">SSH // colab ssh (xterm.js)</span>
           <span id="termStatus">OFFLINE</span>
         </div>
         <div id="xtermBox"></div>
@@ -255,7 +586,7 @@
           </div>
           <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
             <label class="stat-label" style="display:flex;align-items:center;gap:6px;">
-              <input type="checkbox" id="newSessHighMem" style="width:auto;" /> HIGH-RAM
+              <input type="checkbox" id="newSessHighMem" style="width:auto;" /> [ HIGH-RAM ]
             </label>
             <button class="btn btn-cyan" id="btnCreateSess" type="button" onclick="createSession()">[CREATE]</button>
             <button class="btn" type="button" onclick="loadSessions()">[REFRESH]</button>
@@ -340,9 +671,20 @@
         <div id="cfgTestResult" class="hint"></div>
       </div>
       <div class="card">
+        <div class="card-title">SSH KEY (colab ssh)</div>
+        <p class="hint">Generated on the server (ed25519) at startup. colab ssh sends the public key to the runtime on every connect, so there is nothing to install by hand. The private key never leaves the server.</p>
+        <div id="sshKeyInfo" class="log-box">—</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn" type="button" onclick="loadSshKey()">[REFRESH]</button>
+          <button class="btn btn-cyan" type="button" onclick="copySshKey()">[COPY_PUBLIC]</button>
+          <button class="btn btn-danger" type="button" onclick="regenSshKey()">[REGENERATE]</button>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-title">GOOGLE COLAB AUTH</div>
         <button class="btn btn-cyan" type="button" onclick="getAuthUrl()">[1.GENERATE_LOGIN_LINK]</button>
-        <a id="authLink" href="#" target="_blank" style="display:none;color:var(--cyan);">Open Google Consent</a>
+        <a id="authLink" href="#" target="_blank" rel="noopener" style="display:none;color:var(--cyan);">Open Google Consent</a>
+        <button class="btn btn-cyan" id="authLinkCopy" type="button" style="display:none;" onclick="copyText(document.getElementById('authLink').href, '')">[COPY_LINK]</button>
         <label class="stat-label">STEP 2: PASTE CODE</label>
         <div style="display:flex;gap:8px;">
           <input type="text" id="authCodeInput" placeholder="4/0..." />
@@ -359,15 +701,224 @@
     </div>
   </main>
 
+  <!-- FLOATING ARROWS / FUNCTION KEYPAD -->
+  <div id="arrowsFloatingPad" class="arrows-pad" style="display:none;" aria-label="Virtual keypad">
+    <div class="arrows-pad-header" id="arrowsPadHeader" title="Drag to move keypad">
+      <div class="arrows-pad-title">
+        <span class="drag-icon">⋮⋮</span>
+        <span>KEYPAD</span>
+      </div>
+      <button class="arrows-pad-close" type="button" onclick="toggleArrowsPanel(false)" title="Close keypad">✕</button>
+    </div>
+    <div class="arrows-grid">
+      <!-- Row 1: ESC, ↑, CTRL -->
+      <button type="button" class="pad-key key-esc" onclick="pressPadKey('esc')" title="Escape (ESC)">ESC</button>
+      <button type="button" class="pad-key key-arrow" onclick="pressPadKey('up')" title="Up Arrow (↑)">↑</button>
+      <button type="button" class="pad-key key-mod" id="padKeyCtrl" onclick="toggleModifier('ctrl')" title="Toggle CTRL (Latch/Release)">
+        <span>CTRL</span>
+        <span class="key-mod-led" id="ledCtrl"></span>
+      </button>
+
+      <!-- Row 2: ←, ○ (ENTER), → -->
+      <button type="button" class="pad-key key-arrow" onclick="pressPadKey('left')" title="Left Arrow (←)">←</button>
+      <button type="button" class="pad-key key-enter" onclick="pressPadKey('enter')" title="Enter (○ / ↵)">
+        <span class="key-sym-circle">○</span>
+        <span class="key-subtext">ENTER</span>
+      </button>
+      <button type="button" class="pad-key key-arrow" onclick="pressPadKey('right')" title="Right Arrow (→)">→</button>
+
+      <!-- Row 3: F10, ↓, ALT -->
+      <button type="button" class="pad-key key-f10" onclick="pressPadKey('f10')" title="F10 Function Key">F10</button>
+      <button type="button" class="pad-key key-arrow" onclick="pressPadKey('down')" title="Down Arrow (↓)">↓</button>
+      <button type="button" class="pad-key key-mod" id="padKeyAlt" onclick="toggleModifier('alt')" title="Toggle ALT (Latch/Release)">
+        <span>ALT</span>
+        <span class="key-mod-led" id="ledAlt"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- EXTERNAL LINK / AUTH MODAL WINDOW -->
+  <div id="extModal" class="ext-modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="extModalTitle">
+    <div class="ext-modal-window">
+      <div class="ext-modal-header">
+        <div class="ext-modal-title" id="extModalTitle">
+          <span style="color:var(--cyan);font-weight:bold;">[WEB]</span>
+          <span id="extModalUrl" class="ext-modal-url" title=""></span>
+        </div>
+        <div class="ext-modal-actions">
+          <button class="btn btn-cyan" id="extModalCopyBtn" type="button" title="Copy URL">[COPY_LINK]</button>
+          <a class="btn btn-cyan" id="extModalExternalBtn" href="#" target="_blank" rel="noopener noreferrer" title="Open in standard browser tab">[OPEN_EXTERNAL]</a>
+          <button class="btn ext-modal-close" id="extModalClose" type="button" title="Close window" aria-label="Close">[X]</button>
+        </div>
+      </div>
+      <div id="extModalNotice" class="ext-modal-notice">
+        <span>[!] Note: If page doesn't load or is blocked (e.g. Google X-Frame-Options), click <strong>[OPEN_EXTERNAL]</strong></span>
+        <button class="btn" type="button" style="padding:2px 6px;font-size:10px;line-height:1;" onclick="document.getElementById('extModalNotice').style.display='none'">✕</button>
+      </div>
+      <div class="ext-modal-body">
+        <iframe id="extModalIframe" class="ext-modal-iframe" src="about:blank" allow="clipboard-read; clipboard-write" allowfullscreen></iframe>
+        <div id="extModalFallback" class="ext-modal-fallback" style="display:none;">
+          <p>Google and most other sites forbid being embedded in an iframe (X-Frame-Options / CSP), so this link opens in a separate small popup window. The browser blocked the popup — click the button below (or copy the link).</p>
+          <div><button class="btn btn-cyan" id="extModalPopupBtn" type="button">[OPEN_POPUP]</button></div>
+          <textarea id="extModalFallbackUrl" readonly rows="5" onclick="this.select()"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
   <script>
     let activeSession = localStorage.getItem('colab_active_session') || '';
     let termMode = localStorage.getItem('colab_term_mode') || 'pty';
+    // stable per-device id: lets the server re-attach this browser/APK to the same running shell
+    let termSid = localStorage.getItem('colab_term_sid');
+    if (!termSid) {
+      termSid = 'd' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      localStorage.setItem('colab_term_sid', termSid);
+    }
     let ws = null, wsRetryTimer = null, term = null, fitAddon = null;
     let fmPath = '/content';
     let termTranscript = '';
     let selectMode = false;
+    let ptyNoRetry = false;      // set after `exit` / fatal server error: do not auto-reconnect
+    // Virtual Modifier states for keypad
+    let virtualCtrlActive = false;
+    let virtualAltActive = false;
+    let reconnectAttempts = 0;
+    let selectRefreshTimer = null;
+
+    // ---- External link & Auth modal window ----
+    let currentExtUrl = '';
+    const _origWindowOpen = window.open;
+
+    // Only same-origin pages can be shown in the iframe; Google etc. send X-Frame-Options/CSP frame-ancestors
+    // and will always refuse (blank page / 401 / "invalid page"). The User-Agent is NOT the cause.
+    function canFrame(url) {
+      try { return new URL(url, location.href).origin === location.origin; } catch (e) { return false; }
+    }
+
+    function openNewTab(url) {
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.dataset.noIntercept = '1';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return true;
+      } catch (e) { return null; }
+    }
+
+    // Real popup window (OAuth works in popups, not in iframes). Must be called from a user gesture.
+    function openPopup(url) {
+      const w = 520, h = 720;
+      const left = Math.max(0, Math.round((window.screenX || 0) + (window.outerWidth - w) / 2));
+      const top = Math.max(0, Math.round((window.screenY || 0) + (window.outerHeight - h) / 2));
+      let win = null;
+      const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      if (touch) {
+        // Phones / APK WebView have no floating windows and window.open() is unreliable there.
+        // A real <a target=_blank> click is routed by the wrapper (e.g. "open external links in external
+        // browser") and leaves this page — and the terminal — untouched.
+        if (navigator.userActivation && !navigator.userActivation.isActive) return null; // no gesture: show fallback card
+        return openNewTab(url);
+      }
+      try {
+        win = _origWindowOpen.call(window, '', 'colab_ext_window',
+          'popup=yes,width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes');
+      } catch (e) {}
+      if (!win) return null;
+      try { win.opener = null; } catch (e) {}
+      try { win.location.href = url; } catch (e) { try { win.close(); } catch (_) {} return null; }
+      try { win.focus(); } catch (e) {}
+      return win;
+    }
+
+    function openExtModal(url) {
+      if (!url || url === '#' || url.startsWith('javascript:')) return;
+      currentExtUrl = url;
+      const modal = document.getElementById('extModal');
+      const iframe = document.getElementById('extModalIframe');
+      const fb = document.getElementById('extModalFallback');
+      const urlEl = document.getElementById('extModalUrl');
+      const extBtn = document.getElementById('extModalExternalBtn');
+      const notice = document.getElementById('extModalNotice');
+      if (!modal || !iframe) return;
+
+      const framed = canFrame(url);
+      if (!framed) {
+        const win = openPopup(url);
+        if (win) { closeExtModal(true); currentExtUrl = url; return; }
+      }
+
+      if (urlEl) { urlEl.textContent = url; urlEl.title = url; }
+      if (extBtn) extBtn.href = url;
+      if (framed) {
+        if (notice) notice.style.display = 'flex';
+        if (fb) fb.style.display = 'none';
+        iframe.style.display = '';
+        iframe.src = url;
+      } else {
+        if (notice) notice.style.display = 'none';
+        iframe.style.display = 'none';
+        iframe.src = 'about:blank';
+        if (fb) {
+          fb.style.display = 'flex';
+          const ta = document.getElementById('extModalFallbackUrl');
+          if (ta) ta.value = url;
+        }
+      }
+      modal.style.display = 'flex';
+    }
+
+    function closeExtModal(keepUrl) {
+      const modal = document.getElementById('extModal');
+      const iframe = document.getElementById('extModalIframe');
+      if (modal) modal.style.display = 'none';
+      if (iframe) iframe.src = 'about:blank';
+      if (keepUrl !== true) currentExtUrl = '';
+    }
+
+    function copyExtModalUrl() {
+      if (!currentExtUrl) return;
+      const btn = document.getElementById('extModalCopyBtn');
+      navigator.clipboard.writeText(currentExtUrl).then(() => {
+        if (btn) {
+          const old = btn.textContent;
+          btn.textContent = '[COPIED]';
+          setTimeout(() => { btn.textContent = old; }, 1500);
+        }
+      }).catch(() => {
+        prompt('Copy URL:', currentExtUrl);
+      });
+    }
+
+    // Intercept window.open
+    window.open = function(url, target, features) {
+      if (url && typeof url === 'string' && /^https?:\/\//i.test(url)) {
+        openExtModal(url);
+        return null;
+      }
+      return _origWindowOpen.apply(window, arguments);
+    };
+
+    // Intercept all external link clicks on page
+    document.addEventListener('click', function(e) {
+      const a = e.target.closest('a');
+      if (!a) return;
+      if (a.closest('#extModal') || a.hasAttribute('download') || a.dataset.noIntercept) return;
+      const href = a.getAttribute('href') || a.href;
+      if (!href || href === '#' || href.startsWith('javascript:')) return;
+      if (/^https?:\/\//i.test(href)) {
+        e.preventDefault();
+        openExtModal(href);
+      }
+    }, true);
 
     function stripAnsi(s) {
       if (!s) return '';
@@ -385,12 +936,15 @@
       if (termTranscript.length > 400000) {
         termTranscript = termTranscript.slice(-300000);
       }
-      if (selectMode) {
-        const pan = document.getElementById('selectModePanel');
-        if (pan) {
-          pan.textContent = termTranscript;
-          pan.scrollTop = pan.scrollHeight;
-        }
+      if (selectMode && !selectRefreshTimer) {
+        selectRefreshTimer = setTimeout(() => {
+          selectRefreshTimer = null;
+          const pan = document.getElementById('selectModePanel');
+          if (pan) {
+            pan.textContent = stripAnsi(termTranscript);
+            pan.scrollTop = pan.scrollHeight;
+          }
+        }, 250);
       }
     }
 
@@ -420,7 +974,123 @@
     async function apiFetch(path, opts) {
       opts = opts || {};
       opts.headers = apiHeaders(opts.headers || {});
-      return fetch(apiUrl(path), opts);
+      // While any API call is in flight, watch for a CLI command that is blocked on a Google auth code.
+      const watch = !String(path).startsWith('/api/auth/pending');
+      if (watch) authWatchStart();
+      try { return await fetch(apiUrl(path), opts); }
+      finally { if (watch) authWatchStop(); }
+    }
+
+    // ---- Google auth prompt coming from the CLI ("Enter the authorization code:") ----
+    let authWatchCount = 0, authWatchTimer = null, authPolling = false;
+    let authPendingId = null, authLastSubmittedId = null, authBannerShown = false, authDismissedId = null;
+    function authWatchStart() {
+      authWatchCount++;
+      if (!authWatchTimer) authWatchTimer = setInterval(pollPendingAuth, 1500);
+    }
+    function authWatchStop() {
+      authWatchCount = Math.max(0, authWatchCount - 1);
+      if (authWatchCount === 0 && !authBannerShown && authWatchTimer) { clearInterval(authWatchTimer); authWatchTimer = null; }
+    }
+    function copyText(text, okMsg) {
+      const done = () => { const m = document.getElementById('authBannerMsg'); if (m && okMsg) m.textContent = okMsg; };
+      const fallback = () => {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.focus(); ta.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if (ok) return done();
+        } catch (e) {}
+        prompt('Copy:', text);
+      };
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done).catch(fallback);
+      else fallback();
+    }
+    function copyAuthLink() {
+      const u = document.getElementById('authBannerUrl').value;
+      if (u) copyText(u, 'Link copied.');
+    }
+    function dismissAuthBanner() {
+      // hide until the CLI asks for a NEW code (different pending id)
+      authDismissedId = authPendingId;
+      authBannerShown = false;
+      document.getElementById('authBanner').style.display = 'none';
+    }
+    function showAuthBanner(p) {
+      const box = document.getElementById('authBanner');
+      if (p && p.id === authDismissedId) { box.style.display = 'none'; authBannerShown = false; return; }
+      if (!p) authDismissedId = null;
+      if (!p) {
+        if (authBannerShown) {
+          authBannerShown = false;
+          box.style.display = 'none';
+          document.getElementById('authBannerCode').value = '';
+          document.getElementById('authBannerMsg').textContent = '';
+          checkAuth();
+          if (authWatchCount === 0 && authWatchTimer) { clearInterval(authWatchTimer); authWatchTimer = null; }
+        }
+        return;
+      }
+      authPendingId = p.id;
+      const urlEl = document.getElementById('authBannerUrl');
+      const url = p.url || '';
+      if (urlEl.value !== url) urlEl.value = url;
+      const open = document.getElementById('authBannerOpen');
+      open.href = url || '#';
+      open.style.display = url ? 'inline-block' : 'none';
+      open.onclick = (e) => {
+        if (url) {
+          e.preventDefault();
+          openExtModal(url);
+        }
+      };
+      document.getElementById('authBannerCmd').textContent = p.command || '';
+      const msg = document.getElementById('authBannerMsg');
+      if (!url) msg.textContent = 'The CLI did not print a login link. Check the server logs or use [AUTH&CONFIG].';
+      else if (authLastSubmittedId === p.id && !authBannerShown) msg.textContent = 'Code was not accepted. Use the (new) link and enter a fresh code.';
+      document.getElementById('authBannerSubmit').disabled = false;
+      if (!authBannerShown) {
+        authBannerShown = true;
+        box.style.display = 'flex';
+        setTimeout(() => document.getElementById('authBannerCode').focus(), 50);
+      }
+    }
+    async function pollPendingAuth() {
+      if (authPolling) return;
+      authPolling = true;
+      try {
+        const r = await apiFetch('/api/auth/pending');
+        if (!r.ok) return;
+        const d = await r.json();
+        showAuthBanner((d.pending || [])[0] || null);
+      } catch (e) {}
+      finally { authPolling = false; }
+    }
+    async function submitPendingAuth() {
+      const input = document.getElementById('authBannerCode');
+      const msg = document.getElementById('authBannerMsg');
+      const btn = document.getElementById('authBannerSubmit');
+      const code = input.value.trim();
+      if (!code) { msg.textContent = 'Paste the code first.'; return; }
+      btn.disabled = true;
+      msg.textContent = 'Sending code…';
+      try {
+        const r = await apiFetch('/api/auth/pending/code', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: authPendingId, code })
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) { msg.textContent = d.error || 'Failed to send code.'; btn.disabled = false; return; }
+        authLastSubmittedId = authPendingId;
+        input.value = '';
+        msg.textContent = 'Code sent. Waiting for Colab…';
+        setTimeout(pollPendingAuth, 800);
+      } catch (e) {
+        msg.textContent = 'ERROR: ' + e.message;
+        btn.disabled = false;
+      }
     }
     function wsUrlFor(path, extraQuery) {
       const c = getCfg();
@@ -445,7 +1115,7 @@
     }
     function updateSessionLabel() {
       document.getElementById('currentSessionLabel').textContent = activeSession || 'DEFAULT';
-      document.getElementById('termModeLabel').textContent = termMode === 'pty' ? 'PTY' : 'LINE-EXEC';
+      document.getElementById('termModeLabel').textContent = termMode === 'pty' ? 'SSH' : 'LINE-EXEC';
     }
     function loadConnectionCfgIntoForm() {
       const c = getCfg();
@@ -489,7 +1159,7 @@
       if (name === 'hardware') fetchHardwareStats();
       if (name === 'files') fmList();
       if (name === 'notebooks') { restoreDriveJob(); }
-      if (name === 'auth') { loadConnectionCfgIntoForm(); checkAuth(); }
+      if (name === 'auth') { loadConnectionCfgIntoForm(); checkAuth(); loadSshKey(); }
       if (name === 'terminal' && termMode === 'pty') {
         setTimeout(() => { try { fitAddon && fitAddon.fit(); sendResize(); } catch (e) {} }, 50);
       }
@@ -503,7 +1173,7 @@
       document.getElementById('xtermBox').classList.toggle('hidden', termMode !== 'pty');
       document.getElementById('lineExecBox').classList.toggle('visible', termMode === 'exec');
       document.getElementById('termHeaderTitle').textContent =
-        termMode === 'pty' ? 'PTY // colab console (xterm.js)' : 'LINE-EXEC // colab exec per line';
+        termMode === 'pty' ? 'SSH // colab ssh (xterm.js)' : 'LINE-EXEC // colab exec per line';
       updateSessionLabel();
       reconnectTerm();
     }
@@ -522,11 +1192,22 @@
           selectionForeground: '#ffffff'
         },
         allowProposedApi: true,
+        // OSC-8 hyperlinks: without this xterm shows a confirm() banner and calls window.open() itself
+        linkHandler: {
+          allowNonHttpProtocols: false,
+          activate: (ev, uri) => { if (/^https?:\/\//i.test(uri)) openExtModal(uri); }
+        },
         scrollback: 5000,
         rightClickSelectsWord: true
       });
       fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
+      // Plain-text URLs printed by the CLI (e.g. agy / antigravity login link) become clickable
+      try {
+        if (window.WebLinksAddon) {
+          term.loadAddon(new WebLinksAddon.WebLinksAddon((ev, uri) => openExtModal(uri)));
+        }
+      } catch (e) { console.warn('web-links addon failed', e); }
       term.open(document.getElementById('xtermBox'));
       fitAddon.fit();
 
@@ -546,11 +1227,38 @@
 
       term.onData((data) => {
         if (termMode !== 'pty' || !ws || ws.readyState !== WebSocket.OPEN) return;
-        ws.send(JSON.stringify({ type: 'stdin', data }));
+        let out = data;
+        if (virtualCtrlActive || virtualAltActive) {
+          if (data.length === 1) {
+            let code = data.charCodeAt(0);
+            if (virtualCtrlActive) {
+              if (code >= 65 && code <= 90) out = String.fromCharCode(code - 64);
+              else if (code >= 97 && code <= 122) out = String.fromCharCode(code - 96);
+              else if (data === ' ' || data === '@') out = '\x00';
+              else if (data === '[') out = '\x1b';
+              else if (data === '\\') out = '\x1c';
+              else if (data === ']') out = '\x1d';
+            }
+            if (virtualAltActive) {
+              out = '\x1b' + out;
+            }
+          }
+        }
+        ws.send(JSON.stringify({ type: 'stdin', data: out }));
       });
-      window.addEventListener('resize', () => {
-        if (termMode === 'pty' && fitAddon) { fitAddon.fit(); sendResize(); }
-      });
+      let resizeTimer = null;
+      const refit = () => {
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          resizeTimer = null;
+          if (termMode !== 'pty' || !fitAddon) return;
+          const box = document.getElementById('xtermBox');
+          if (!box || box.offsetWidth === 0 || box.offsetHeight === 0) return; // hidden tab
+          try { fitAddon.fit(); sendResize(); } catch (e) {}
+        }, 100);
+      };
+      window.addEventListener('resize', refit);
+      if (window.ResizeObserver) new ResizeObserver(refit).observe(document.getElementById('xtermBox'));
     }
 
     function clearTerminal() {
@@ -582,6 +1290,214 @@
       }
     }
 
+    // ---- Virtual Keypad Logic (ARROWS / MODIFIERS) ----
+    function toggleArrowsPanel(force) {
+      const pad = document.getElementById('arrowsFloatingPad');
+      const btn = document.getElementById('btnArrowsToggle');
+      if (!pad) return;
+      let show = (typeof force === 'boolean') ? force : (pad.style.display === 'none' || !pad.style.display);
+      pad.style.display = show ? 'flex' : 'none';
+      if (btn) btn.classList.toggle('active-mode', show);
+      if (show) {
+        requestAnimationFrame(() => {
+          const rect = pad.getBoundingClientRect();
+          if (rect.right > window.innerWidth || rect.bottom > window.innerHeight) {
+            pad.style.right = '20px';
+            pad.style.bottom = '20px';
+            pad.style.left = 'auto';
+            pad.style.top = 'auto';
+          }
+        });
+      }
+    }
+
+    function toggleModifier(mod) {
+      try { if (document.activeElement && document.activeElement.classList.contains('pad-key') && !document.activeElement.classList.contains('key-mod')) document.activeElement.blur(); } catch (_) {}
+      if (mod === 'ctrl') {
+        virtualCtrlActive = !virtualCtrlActive;
+      } else if (mod === 'alt') {
+        virtualAltActive = !virtualAltActive;
+      }
+      updateModifierUI();
+      try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+    }
+
+    function updateModifierUI() {
+      const ctrlBtn = document.getElementById('padKeyCtrl');
+      const altBtn = document.getElementById('padKeyAlt');
+      const ctrlLed = document.getElementById('ledCtrl');
+      const altLed = document.getElementById('ledAlt');
+
+      if (ctrlBtn) ctrlBtn.classList.toggle('active-latched', virtualCtrlActive);
+      if (ctrlLed) ctrlLed.classList.toggle('active', virtualCtrlActive);
+
+      if (altBtn) altBtn.classList.toggle('active-latched', virtualAltActive);
+      if (altLed) altLed.classList.toggle('active', virtualAltActive);
+    }
+
+    function sendTerminalRaw(data) {
+      if (termMode === 'pty') {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'stdin', data }));
+          return true;
+        } else {
+          setStatus('PTY OFFLINE', 'var(--amber)');
+          return false;
+        }
+      } else {
+        if (data === '\r' || data === '\n') {
+          const btn = document.querySelector('#lineExecBox form button[type="submit"]');
+          if (btn) btn.click();
+        }
+        return true;
+      }
+    }
+
+    function pressPadKey(key) {
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
+      try { if (document.activeElement && document.activeElement.classList.contains('pad-key')) document.activeElement.blur(); } catch (_) {}
+
+      let seq = '';
+      const isCtrl = virtualCtrlActive;
+      const isAlt = virtualAltActive;
+
+      switch (key) {
+        case 'up':
+          if (isCtrl && isAlt) seq = '\x1b[1;7A';
+          else if (isCtrl) seq = '\x1b[1;5A';
+          else if (isAlt) seq = '\x1b[1;3A';
+          else seq = '\x1b[A';
+          break;
+
+        case 'down':
+          if (isCtrl && isAlt) seq = '\x1b[1;7B';
+          else if (isCtrl) seq = '\x1b[1;5B';
+          else if (isAlt) seq = '\x1b[1;3B';
+          else seq = '\x1b[B';
+          break;
+
+        case 'right':
+          if (isCtrl && isAlt) seq = '\x1b[1;7C';
+          else if (isCtrl) seq = '\x1b[1;5C';
+          else if (isAlt) seq = '\x1b[1;3C';
+          else seq = '\x1b[C';
+          break;
+
+        case 'left':
+          if (isCtrl && isAlt) seq = '\x1b[1;7D';
+          else if (isCtrl) seq = '\x1b[1;5D';
+          else if (isAlt) seq = '\x1b[1;3D';
+          else seq = '\x1b[D';
+          break;
+
+        case 'enter':
+          if (isAlt && isCtrl) {
+            seq = '\x1b\n';
+          } else if (isAlt) {
+            seq = '\x1b\r';
+          } else if (isCtrl) {
+            seq = '\n';
+          } else {
+            sendPtyEnter();
+            return;
+          }
+          break;
+
+        case 'esc':
+          if (isAlt) seq = '\x1b\x1b';
+          else seq = '\x1b';
+          break;
+
+        case 'f10':
+          if (isCtrl && isAlt) seq = '\x1b[21;7~';
+          else if (isCtrl) seq = '\x1b[21;5~';
+          else if (isAlt) seq = '\x1b[21;3~';
+          else seq = '\x1b[21~';
+          break;
+
+        default:
+          return;
+      }
+
+      if (seq) {
+        sendTerminalRaw(seq);
+        setStatus(key.toUpperCase() + ' SENT', 'var(--text)');
+      }
+    }
+
+    function initArrowsPadDrag() {
+      const pad = document.getElementById('arrowsFloatingPad');
+      const handle = document.getElementById('arrowsPadHeader');
+      if (!pad || !handle) return;
+
+      // keys must not steal focus from the terminal, and must not stay highlighted after a tap
+      pad.addEventListener('mousedown', (e) => { if (e.target.closest('.pad-key')) e.preventDefault(); });
+      const release = (e) => {
+        const key = e.target.closest && e.target.closest('.pad-key');
+        if (key) setTimeout(() => { try { key.blur(); } catch (_) {} }, 0);
+      };
+      pad.addEventListener('pointerup', release);
+      pad.addEventListener('pointercancel', release);
+      pad.addEventListener('touchend', release, { passive: true });
+
+      let isDragging = false;
+      let startX = 0, startY = 0;
+      let origX = 0, origY = 0;
+
+      handle.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.arrows-pad-close')) return;
+        isDragging = true;
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        const rect = pad.getBoundingClientRect();
+        startX = e.clientX;
+        startY = e.clientY;
+        origX = rect.left;
+        origY = rect.top;
+        e.preventDefault();
+      });
+
+      handle.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        let nx = origX + dx;
+        let ny = origY + dy;
+        const padRect = pad.getBoundingClientRect();
+        const maxX = window.innerWidth - padRect.width - 4;
+        const maxY = window.innerHeight - padRect.height - 4;
+        nx = Math.max(4, Math.min(maxX, nx));
+        ny = Math.max(4, Math.min(maxY, ny));
+        pad.style.left = nx + 'px';
+        pad.style.top = ny + 'px';
+        pad.style.right = 'auto';
+        pad.style.bottom = 'auto';
+      });
+
+      const stopDrag = (e) => {
+        if (isDragging) {
+          isDragging = false;
+          try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+          try {
+            localStorage.setItem('colab_arrows_pos', JSON.stringify({
+              left: pad.style.left, top: pad.style.top
+            }));
+          } catch (_) {}
+        }
+      };
+      handle.addEventListener('pointerup', stopDrag);
+      handle.addEventListener('pointercancel', stopDrag);
+
+      try {
+        const saved = JSON.parse(localStorage.getItem('colab_arrows_pos') || 'null');
+        if (saved && saved.left && saved.top) {
+          pad.style.left = saved.left;
+          pad.style.top = saved.top;
+          pad.style.right = 'auto';
+          pad.style.bottom = 'auto';
+        }
+      } catch (_) {}
+    }
+
     function toggleSelectMode(force) {
       if (typeof force === 'boolean') selectMode = force;
       else selectMode = !selectMode;
@@ -595,7 +1511,7 @@
           xtermBox.classList.add('hidden');
           pan.style.display = 'block';
           // prefer live transcript; fallback serialize from xterm buffer
-          let text = termTranscript;
+          let text = stripAnsi(termTranscript);
           if (!text && term) {
             try {
               const buf = [];
@@ -616,7 +1532,7 @@
           xtermBox.classList.add('hidden');
           if (lineBox) lineBox.style.display = 'none';
           pan.style.display = 'block';
-          pan.textContent = document.getElementById('terminalLogs').textContent || termTranscript || '(empty)';
+          pan.textContent = document.getElementById('terminalLogs').textContent || stripAnsi(termTranscript) || '(empty)';
         }
       } else {
         bar.classList.remove('on');
@@ -638,7 +1554,7 @@
 
     function copySelectModeAll() {
       const pan = document.getElementById('selectModePanel');
-      const text = (pan && pan.textContent) || termTranscript || '';
+      const text = (pan && pan.textContent) || stripAnsi(termTranscript) || '';
       if (!text) { setStatus('EMPTY', 'var(--amber)'); return; }
       navigator.clipboard.writeText(text).then(() => setStatus('COPIED ALL', 'var(--text)'))
         .catch(() => {
@@ -692,63 +1608,115 @@
       if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; }
       setStatus('OFFLINE', 'var(--red)');
     }
+    function killShell() {
+      if (!confirm('Kill the running shell (agy and everything started in it will stop)?')) return;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ type: 'kill' })); } catch (e) {}
+      } else {
+        setStatus('PTY OFFLINE', 'var(--amber)');
+      }
+    }
     function reconnectTerm() {
       disconnectTerm();
+      ptyNoRetry = false;
+      reconnectAttempts = 0;
       if (termMode === 'pty') connectPty();
       else connectLineExec();
     }
+    function scheduleReconnect() {
+      if (wsRetryTimer) clearTimeout(wsRetryTimer);
+      const delay = Math.min(30000, 2000 * Math.pow(2, reconnectAttempts++)); // 2s, 4s, 8s … 30s
+      wsRetryTimer = setTimeout(() => {
+        wsRetryTimer = null;
+        if (termMode === 'pty' && !document.hidden && !ptyNoRetry) connectPty();
+      }, delay);
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden || termMode !== 'pty' || !activeSession || ptyNoRetry) return;
+      if (!ws || ws.readyState > 1) {
+        if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+        connectPty();
+      }
+    });
     function connectPty() {
       initXterm();
-      if (!activeSession) term.writeln('\x1b[33mNo session. SESSIONS → [CREATE] → [USE].\x1b[0m');
-      const wurl = wsUrlFor('/pty', { cols: String(term.cols || 80), rows: String(term.rows || 24), mode: 'console' });
+      if (!activeSession) {
+        setStatus('NO SESSION', 'var(--amber)');
+        term.writeln('\x1b[33mNo session selected. SESSIONS → [CREATE] or [USE].\x1b[0m');
+        return;
+      }
+      ptyNoRetry = false;
+      const wurl = wsUrlFor('/pty', { cols: String(term.cols || 80), rows: String(term.rows || 24), mode: 'ssh', sid: termSid });
       setStatus('CONNECTING…', 'var(--amber)');
-      term.writeln('\x1b[90mPTY ' + wurl.replace(/api_key=[^&]+/, 'api_key=***') + '\x1b[0m');
-      ws = new WebSocket(wurl);
-      ws.onopen = () => {
-        setStatus('PTY ONLINE', 'var(--text)');
+      term.writeln('\x1b[90mSSH ' + wurl.replace(/api_key=[^&]+/, 'api_key=***') + '\x1b[0m');
+      const sock = new WebSocket(wurl);
+      ws = sock;
+      sock.onopen = () => {
+        if (ws !== sock) return;
+        setStatus('SSH ONLINE', 'var(--text)');
         sendResize();
         if (window._ptyPingTimer) clearInterval(window._ptyPingTimer);
         window._ptyPingTimer = setInterval(() => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            try { ws.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch (e) {}
+          if (ws === sock && sock.readyState === WebSocket.OPEN) {
+            try { sock.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch (e) {}
           }
-        }, 12000);
+        }, 25000);
       };
-      ws.onmessage = (ev) => {
+      sock.onmessage = (ev) => {
+        if (ws !== sock) return;
         let msg;
         try { msg = JSON.parse(ev.data); } catch (e) {
           term.write(ev.data);
-          appendTranscript(stripAnsi(ev.data));
+          appendTranscript(ev.data);
           return;
         }
-        if (msg.type === 'ping' || msg.type === 'pong') {
-          return; // keepalive — do not print
-        }
+        if (msg.type === 'ping' || msg.type === 'pong') return; // keepalive — do not print
         if (msg.type === 'stdout') {
-          term.write(msg.data || '');
-          appendTranscript(stripAnsi(msg.data || ''));
+          const d = msg.data || '';
+          term.write(d);
+          appendTranscript(d); // raw; ANSI is stripped lazily only when SELECT_TEXT is opened
         } else if (msg.type === 'ready') {
-          term.writeln('\x1b[32m[PTY ready]\x1b[0m');
-          appendTranscript('[PTY ready]\n');
+          reconnectAttempts = 0;
+          if (msg.data && msg.data.attached) {
+            // server kept the shell alive: wipe the local screen, the server now replays the live one
+            try { term.reset(); } catch (e) {}
+            termTranscript = '';
+            sendResize();
+            return;
+          }
+          // optional: run the new shell inside tmux (not needed for reattach, kept as extra safety)
+          if (localStorage.getItem('colab_tmux') === '1' && ws === sock && sock.readyState === WebSocket.OPEN) {
+            setTimeout(() => {
+              if (ws === sock && sock.readyState === WebSocket.OPEN) {
+                sock.send(JSON.stringify({ type: 'stdin', data:
+                  " if command -v tmux >/dev/null 2>&1; then exec tmux new-session -A -s colab; else echo '[tmux not found: run apt-get install -y tmux, or untick tmux keep-alive]'; fi\r" }));
+              }
+            }, 300);
+          }
+          term.writeln('\x1b[32m[ssh ready]\x1b[0m');
+          appendTranscript('[ssh ready]\n');
+          sendResize();
         } else if (msg.type === 'error') {
+          ptyNoRetry = true; // config/limit errors will not fix themselves — use [RECONNECT]
           term.writeln('\x1b[31m[error] ' + (msg.data || '') + '\x1b[0m');
-          appendTranscript('[error] ' + stripAnsi(msg.data || '') + '\n');
+          appendTranscript('[error] ' + (msg.data || '') + '\n');
           setStatus('ERROR', 'var(--red)');
         } else if (msg.type === 'exit') {
-          term.writeln('\r\n\x1b[90m[exit ' + msg.exitCode + ']\x1b[0m');
+          ptyNoRetry = true; // shell ended on purpose — do not respawn it
+          term.writeln('\r\n\x1b[90m[exit ' + msg.exitCode + '] press [RECONNECT] to open a new shell\x1b[0m');
           appendTranscript('\n[exit ' + msg.exitCode + ']\n');
           setStatus('EXITED', 'var(--amber)');
         }
       };
-      ws.onclose = () => {
-        setStatus('DISCONNECTED', 'var(--red)');
+      sock.onclose = (ev) => {
+        if (ws !== sock) return;
         if (window._ptyPingTimer) { clearInterval(window._ptyPingTimer); window._ptyPingTimer = null; }
-        // Longer delay; skip if tab hidden (mobile background)
-        wsRetryTimer = setTimeout(() => {
-          if (termMode === 'pty' && !document.hidden) connectPty();
-        }, 8000);
+        if (ev && ev.code === 4000) { ptyNoRetry = true; setStatus('OPENED ELSEWHERE — [RECONNECT]', 'var(--amber)'); return; }
+        if (ptyNoRetry) return; // keep EXITED / ERROR status
+        setStatus('DISCONNECTED', 'var(--red)');
+        scheduleReconnect();
       };
-      ws.onerror = () => setStatus('WS ERROR', 'var(--red)');
+      sock.onerror = () => { if (ws === sock) setStatus('WS ERROR', 'var(--red)'); };
     }
     function connectLineExec() {
       const wurl = wsUrlFor('/terminal', {});
@@ -810,7 +1778,9 @@
       if (d.auth_url) {
         const a = document.getElementById('authLink');
         a.href = d.auth_url; a.style.display = 'inline';
-        window.open(d.auth_url, '_blank');
+        a.onclick = (e) => { e.preventDefault(); openExtModal(d.auth_url); };
+        document.getElementById('authLinkCopy').style.display = 'inline-block';
+        openExtModal(d.auth_url);
       } else alert(JSON.stringify(d));
     }
     async function submitAuthCode() {
@@ -873,7 +1843,7 @@
       const highMem = document.getElementById('newSessHighMem').checked;
       btn.disabled = true;
       log.className = 'log-box';
-      log.textContent = 'Creating session… accelerator=' + accelerator + ' (may take up to ~2 min)\n';
+      log.textContent = 'Creating session… accelerator=' + accelerator + ' (may take up to ~2 min)\nIf Google login is required, a link + code box appears at the top of the page.\n';
       try {
         const r = await apiFetch('/api/sessions', {
           method: 'POST',
@@ -1066,6 +2036,7 @@
           a.rel = 'noopener noreferrer';
           a.style.cssText = 'color:var(--cyan);word-break:break-all;overflow-wrap:anywhere;';
           a.textContent = u;
+          a.onclick = (e) => { e.preventDefault(); openExtModal(u); };
           row.appendChild(a);
           row.appendChild(document.createElement('br'));
           const copyBtn = document.createElement('button');
@@ -1087,7 +2058,7 @@
           openBtn.textContent = '[OPEN]';
           openBtn.style.marginTop = '4px';
           openBtn.style.marginLeft = '6px';
-          openBtn.onclick = () => window.open(u, '_blank');
+          openBtn.onclick = () => openExtModal(u);
           row.appendChild(openBtn);
           log.appendChild(row);
         });
@@ -1170,8 +2141,8 @@
             '<div><div style="color:var(--text);">' + esc(nb.name) + '</div>' +
             '<div class="path">' + esc(nb.path) + (nb.size != null ? ' · ' + fmtSize(nb.size) : '') + '</div></div>' +
             '<div class="nb-actions">' +
-            '<button class="btn btn-cyan" type="button" data-path="' + escAttr(nb.path) + '" onclick="runNotebook(this.dataset.path)">[RUN]</button>' +
-            '<button class="btn" type="button" data-path="' + escAttr(nb.path) + '" onclick="openNotebookUi(this.dataset.path)">[OPEN_UI]</button>' +
+            '<button class="btn btn-cyan" type="button" data-path="' + escHtmlAttr(nb.path) + '" onclick="runNotebook(this.dataset.path)">[RUN]</button>' +
+            '<button class="btn" type="button" data-path="' + escHtmlAttr(nb.path) + '" onclick="openNotebookUi(this.dataset.path)">[OPEN_UI]</button>' +
             '</div>';
           list.appendChild(row);
         });
@@ -1183,10 +2154,10 @@
     async function runNotebook(nbPath) {
       const log = document.getElementById('nbActionLog');
       if (!activeSession) return;
-      if (!confirm('Run notebook as a script (print output only)?\\n\\n' + nbPath + '\\n\\nInteractive widgets will NOT work here — use [OPEN_UI].')) return;
+      if (!confirm('Run notebook as a script (print output only)?\n\n' + nbPath + '\n\nInteractive widgets will NOT work here — use [OPEN_UI].')) return;
       log.className = 'log-box';
       log.id = 'nbOut';
-      log.textContent = 'Running ' + nbPath + ' …\\n(stdout/stderr will appear below)\\n\\n';
+      log.textContent = 'Running ' + nbPath + ' …\n(stdout/stderr will appear below)\n\n';
       try {
         const r = await apiFetch('/api/notebooks/run', {
           method: 'POST',
@@ -1194,14 +2165,14 @@
           body: JSON.stringify({ session: activeSession, path: nbPath, timeout: 600 })
         });
         const d = await r.json();
-        const body = stripAnsi((d.stdout || '') + (d.stderr ? '\\n' + d.stderr : ''));
+        const body = stripAnsi((d.stdout || '') + (d.stderr ? '\n' + d.stderr : ''));
         log.className = 'log-box ' + (d.success ? 'ok' : 'err');
         log.textContent =
           (d.success ? '=== DONE ===' : '=== FAILED ===') +
-          '  (' + (d.durationMs != null ? d.durationMs + ' ms' : '?') + ')\\n' +
-          'path: ' + nbPath + '\\n\\n' +
-          (body || '(no output)\\n') +
-          '\\n---\\nTip: for buttons/inputs open [OPEN_UI] to use Colab web UI.';
+          '  (' + (d.durationMs != null ? d.durationMs + ' ms' : '?') + ')\n' +
+          'path: ' + nbPath + '\n\n' +
+          (body || '(no output)\n') +
+          '\n---\nTip: for buttons/inputs open [OPEN_UI] to use Colab web UI.';
         log.scrollTop = 0;
       } catch (e) {
         log.className = 'log-box err';
@@ -1217,7 +2188,7 @@
         return;
       }
       log.className = 'log-box';
-      log.textContent = 'Resolving Colab UI URL…\\n';
+      log.textContent = 'Resolving Colab UI URL…\n';
       try {
         const q = '?session=' + encodeURIComponent(activeSession) +
           (nbPath ? '&path=' + encodeURIComponent(nbPath) : '');
@@ -1229,10 +2200,10 @@
         const pre = document.createElement('div');
         pre.style.whiteSpace = 'pre-wrap';
         pre.textContent =
-          (d.hint || '') + '\\n\\n' +
-          (d.notebookUrl ? 'Notebook: ' + d.notebookUrl + '\\n' : '') +
-          (d.sessionUrl ? 'Session: ' + d.sessionUrl + '\\n' : '') +
-          '\\nInteractive widgets/buttons/inputs work only in this Colab browser UI.';
+          (d.hint || '') + '\n\n' +
+          (d.notebookUrl ? 'Notebook: ' + d.notebookUrl + '\n' : '') +
+          (d.sessionUrl ? 'Session: ' + d.sessionUrl + '\n' : '') +
+          '\nInteractive widgets/buttons/inputs work only in this Colab browser UI.';
         log.appendChild(pre);
         if (url) {
           const a = document.createElement('a');
@@ -1241,6 +2212,7 @@
           a.rel = 'noopener';
           a.style.cssText = 'color:var(--cyan);word-break:break-all;';
           a.textContent = url;
+          a.onclick = (e) => { e.preventDefault(); openExtModal(url); };
           log.appendChild(document.createElement('br'));
           log.appendChild(a);
           const btn = document.createElement('button');
@@ -1248,12 +2220,12 @@
           btn.type = 'button';
           btn.style.marginTop = '8px';
           btn.textContent = '[OPEN_IN_BROWSER]';
-          btn.onclick = () => window.open(url, '_blank');
+          btn.onclick = () => openExtModal(url);
           log.appendChild(document.createElement('br'));
           log.appendChild(btn);
-          window.open(url, '_blank');
+          openExtModal(url);
         } else {
-          pre.textContent += '\\n\\n' + JSON.stringify(d, null, 2);
+          pre.textContent += '\n\n' + JSON.stringify(d, null, 2);
         }
       } catch (e) {
         log.className = 'log-box err';
@@ -1431,8 +2403,16 @@
       return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
+    function escHtmlAttr(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    // for inline handlers: onclick="fn('<here>')". File names come from the remote VM, so treat them as hostile.
     function escAttr(s) {
-      return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return escHtmlAttr(
+        String(s == null ? '' : s)
+          .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r')
+      );
     }
     function fmtSize(n) {
       if (n == null || isNaN(n)) return '—';
@@ -1441,7 +2421,75 @@
       return (n / 1048576).toFixed(1) + ' MB';
     }
 
+    // ---- SSH key (colab ssh) ----
+    let lastSshPub = '';
+    function renderSshKey(d) {
+      const box = document.getElementById('sshKeyInfo');
+      if (!box) return;
+      lastSshPub = d.publicKey || '';
+      box.className = 'log-box ' + (d.ok ? 'ok' : 'err');
+      box.textContent = d.ok
+        ? (d.fingerprint || '') + '\n\n' + lastSshPub + '\n\nprivate key: ' + d.keyPath + ' (server only)' +
+          (d.sshClient ? '\nssh client: ' + d.sshClient : '')
+        : 'KEY ERROR: ' + (d.error || 'unknown');
+    }
+    async function loadSshKey() {
+      try { renderSshKey(await (await apiFetch('/api/ssh/key')).json()); }
+      catch (e) { renderSshKey({ ok: false, error: e.message }); }
+    }
+    function copySshKey() {
+      if (!lastSshPub) return;
+      navigator.clipboard.writeText(lastSshPub).then(() => setStatus('KEY COPIED', 'var(--text)')).catch(() => prompt('Copy public key:', lastSshPub));
+    }
+    async function regenSshKey() {
+      if (!confirm('Generate a NEW SSH key? Open terminals keep working; new connections use the new key.')) return;
+      try { renderSshKey(await (await apiFetch('/api/ssh/key/regenerate', { method: 'POST' })).json()); }
+      catch (e) { renderSshKey({ ok: false, error: e.message }); }
+    }
+
+    function initExtModal() {
+      const closeBtn = document.getElementById('extModalClose');
+      if (closeBtn) closeBtn.onclick = () => closeExtModal();
+
+      const backdrop = document.getElementById('extModal');
+      if (backdrop) {
+        backdrop.onclick = function(e) {
+          if (e.target === this) closeExtModal();
+        };
+      }
+
+      const copyBtn = document.getElementById('extModalCopyBtn');
+      if (copyBtn) copyBtn.onclick = copyExtModalUrl;
+
+      const popupBtn = document.getElementById('extModalPopupBtn');
+      if (popupBtn) {
+        popupBtn.onclick = function() {
+          if (currentExtUrl && openPopup(currentExtUrl)) closeExtModal();
+        };
+      }
+
+      const extBtn = document.getElementById('extModalExternalBtn');
+      if (extBtn) {
+        extBtn.onclick = function(e) {
+          e.preventDefault();
+          if (currentExtUrl) {
+            openNewTab(currentExtUrl);
+          }
+        };
+      }
+
+      window.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          const m = document.getElementById('extModal');
+          if (m && m.style.display !== 'none') closeExtModal();
+        }
+      });
+    }
+
     // init
+    initExtModal();
+    initArrowsPadDrag();
+    { const c = document.getElementById('chkTmux'); if (c) c.checked = localStorage.getItem('colab_tmux') === '1'; }
     updateSessionLabel();
     loadConnectionCfgIntoForm();
     setTermMode(termMode);
