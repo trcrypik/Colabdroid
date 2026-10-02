@@ -1380,11 +1380,87 @@ setInterval(() => {
 }, 20000).unref();
 
 // ---- Real PTY WS: `colab ssh` (default) or legacy `colab console` inside node-pty ----
+// The PTY is NOT tied to the WebSocket: when the client disappears (phone locked, APK sent to the
+// background, browser opened for Google login) the shell keeps running and the next /pty connection
+// with the same session+sid re-attaches to it and gets the current screen back.
 const MAX_PTYS = Math.max(1, parseInt(process.env.MAX_PTYS, 10) || 8);
-const activePtys = new Set();
+const PTY_KEEP_MS = (() => {                       // how long a detached shell lives (0 = kill on disconnect)
+  const n = parseInt(process.env.PTY_KEEP_MS, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 2 * 60 * 60 * 1000;
+})();
+const activePtys = new Set();                      // raw pty objects (used by shutdown)
+const ptySessions = new Map();                     // key -> persistent shell
 const WS_HIGH_WATER = 1024 * 1024;
 const WS_LOW_WATER = 256 * 1024;
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+// Server-side terminal emulator → exact screen snapshot on re-attach (works for TUIs like agy).
+let XtermHeadless = null;
+let XtermSerialize = null;
+try {
+  XtermHeadless = require('@xterm/headless').Terminal;
+  XtermSerialize = require('@xterm/addon-serialize').SerializeAddon;
+  console.log('[COLAB-BACKEND] @xterm/headless loaded — PTY screen restore enabled');
+} catch (e) {
+  console.warn('[COLAB-BACKEND] @xterm/headless not available, falling back to raw scrollback replay:', e.message);
+}
+
+function createPtySession(key, args, cols, rows) {
+  const term = pty.spawn('colab', args, {
+    name: 'xterm-256color',
+    cols,
+    rows,
+    cwd: process.env.HOME || os.homedir(),
+    env: {
+      ...process.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      LANG: process.env.LANG || 'C.UTF-8',
+      PYTHONUNBUFFERED: '1',
+      HOME: process.env.HOME || os.homedir()
+    }
+  });
+  const s = { key, term, cols, rows, ws: null, idleTimer: null, dead: false, raw: '', xt: null, ser: null,
+              held: null, onOutput: null, onExit: null };
+  if (XtermHeadless && XtermSerialize) {
+    try {
+      s.xt = new XtermHeadless({ cols, rows, scrollback: 2000, allowProposedApi: true });
+      s.ser = new XtermSerialize();
+      s.xt.loadAddon(s.ser);
+    } catch (e) { s.xt = null; s.ser = null; }
+  }
+  activePtys.add(term);
+  ptySessions.set(key, s);
+  term.onData((d) => {
+    if (s.xt) { try { s.xt.write(d); } catch (e) {} }
+    else { s.raw += d; if (s.raw.length > 200000) s.raw = s.raw.slice(-150000); }
+    if (s.held) s.held.push(d);
+    else if (s.onOutput) s.onOutput(d);
+  });
+  term.onExit(({ exitCode, signal }) => {
+    console.log('[PTY] exit code=' + exitCode + ' signal=' + signal + ' key=' + key);
+    s.dead = true;
+    if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
+    activePtys.delete(term);
+    if (ptySessions.get(key) === s) ptySessions.delete(key);
+    if (s.onExit) { try { s.onExit(exitCode, signal); } catch (e) {} }
+    if (s.xt) { try { s.xt.dispose(); } catch (e) {} s.xt = null; }
+  });
+  return s;
+}
+
+function ptySnapshot(s, cb) {
+  if (s.xt && s.ser) {
+    // write('') is queued behind all earlier output, so the callback sees the fully parsed screen
+    s.xt.write('', () => {
+      let out = '';
+      try { out = s.ser.serialize({ scrollback: 1000 }); } catch (e) {}
+      cb(out);
+    });
+  } else {
+    cb(s.raw);
+  }
+}
 
 wssPty.on('connection', async (ws, req) => {
   trackAlive(ws);
@@ -1396,99 +1472,119 @@ wssPty.on('connection', async (ws, req) => {
     try { ws.close(1011, 'error'); } catch (e) {}
   };
 
-  let term = null;
-  let cleaned = false;
+  let s = null;                 // persistent shell this socket is attached to
+  let detached = false;
   let flushTimer = null;
   let resumeTimer = null;
-  const pending = []; // messages that arrive while the key/spawn is still being prepared
+  let buf = '';
+  const pending = [];           // messages that arrive while the key/spawn is still being prepared
 
-  const cleanup = () => {
-    if (cleaned) return;
-    cleaned = true;
-    if (flushTimer) clearTimeout(flushTimer);
-    if (resumeTimer) clearInterval(resumeTimer);
-    if (term) {
-      activePtys.delete(term);
-      try { term.kill(); } catch (e) {}
+  const detach = () => {
+    if (detached) return;
+    detached = true;
+    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+    if (resumeTimer) { clearInterval(resumeTimer); resumeTimer = null; }
+    if (s && s.ws === ws) {
+      s.ws = null; s.onOutput = null; s.onExit = null; s.held = null;
+      try { s.term.resume(); } catch (e) {}   // never leave a detached shell paused
+      if (!s.dead) {
+        if (PTY_KEEP_MS > 0) {
+          if (s.idleTimer) clearTimeout(s.idleTimer);
+          s.idleTimer = setTimeout(() => {
+            console.log('[PTY] idle timeout, killing ' + s.key);
+            try { s.term.kill(); } catch (e) {}
+          }, PTY_KEEP_MS);
+          if (s.idleTimer.unref) s.idleTimer.unref();
+        } else {
+          try { s.term.kill(); } catch (e) {}
+        }
+      }
     }
   };
-  ws.on('close', cleanup);
-  ws.on('error', cleanup);
+  ws.on('close', detach);
+  ws.on('error', detach);
 
   const handleMsg = (raw) => {
     let msg;
     try {
       msg = JSON.parse(raw.toString());
     } catch (e) {
-      try { term.write(raw.toString()); } catch (err) {}
+      try { s.term.write(raw.toString()); } catch (err) {}
       return;
     }
     if (msg.type === 'stdin' && typeof msg.data === 'string') {
-      try { term.write(msg.data); } catch (e) {}
+      try { s.term.write(msg.data); } catch (e) {}
     } else if (msg.type === 'resize') {
       const c = parseInt(msg.cols, 10);
       const r = parseInt(msg.rows, 10);
       if (c > 0 && r > 0) {
-        try { term.resize(clamp(c, 1, 500), clamp(r, 1, 200)); } catch (e) {}
+        const cc = clamp(c, 1, 500), rr = clamp(r, 1, 200);
+        try { s.term.resize(cc, rr); } catch (e) {}
+        if (s.xt) { try { s.xt.resize(cc, rr); } catch (e) {} }
       }
+    } else if (msg.type === 'kill') {
+      try { s.term.kill(); } catch (e) {}
     } else if (msg.type === 'ping') {
       send({ type: 'pong' });
     }
   };
   ws.on('message', (raw) => {
-    if (!term) { if (pending.length < 100) pending.push(raw); return; }
+    if (!s) { if (pending.length < 100) pending.push(raw); return; }
     handleMsg(raw);
   });
 
   if (!checkWsApiKey(req.url)) return fail('Unauthorized API key');
   if (!pty) return fail('node-pty is not installed on this server. Rebuild Docker image with node-pty.');
-  if (activePtys.size >= MAX_PTYS) return fail('Too many open terminals (max ' + MAX_PTYS + ')');
 
   const q = parseQuery(req.url);
   const session = (q.session || '').trim();
   const mode = String(q.mode || 'ssh').toLowerCase() === 'console' ? 'console' : 'ssh';
   const cols = clamp(parseInt(q.cols, 10) || 80, 20, 500);
   const rows = clamp(parseInt(q.rows, 10) || 24, 5, 200);
+  const sid = /^[A-Za-z0-9_-]{1,64}$/.test(String(q.sid || '')) ? String(q.sid) : 'default';
 
   if (session && !isValidSession(session)) return fail('Invalid session name');
   // Bare `colab ssh` would create a NEW runtime when none exists — never do that implicitly.
   if (mode === 'ssh' && !session) return fail('Select a session first (SESSIONS → [USE]).');
 
-  const args = [mode];
-  if (session) args.push('-s', session);
-  if (mode === 'ssh') {
-    const key = await sshKeyReady;
-    if (!key.ok) return fail('SSH key is not ready: ' + key.error);
-    args.push('-i', SSH_KEY);
+  const key = [mode, session, sid].join(':');
+  let existing = ptySessions.get(key) || null;
+  if (existing && (existing.dead || String(q.fresh || '') === '1')) {
+    if (!existing.dead) { try { existing.term.kill(); } catch (e) {} }
+    ptySessions.delete(key);
+    existing = null;
   }
-  if (cleaned) return; // client left while we were waiting
 
-  console.log('[PTY] spawn colab ' + args.join(' ') + ' cols=' + cols + ' rows=' + rows);
-  try {
-    term = pty.spawn('colab', args, {
-      name: 'xterm-256color',
-      cols,
-      rows,
-      cwd: process.env.HOME || os.homedir(),
-      env: {
-        ...process.env,
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        LANG: process.env.LANG || 'C.UTF-8',
-        PYTHONUNBUFFERED: '1',
-        HOME: process.env.HOME || os.homedir()
-      }
-    });
-  } catch (err) {
-    return fail('Failed to spawn PTY: ' + err.message);
+  let attached = false;
+  if (existing) {
+    s = existing;
+    attached = true;
+    if (s.ws && s.ws !== ws) { try { s.ws.close(4000, 'replaced'); } catch (e) {} }
+  } else {
+    if (ptySessions.size >= MAX_PTYS) return fail('Too many open terminals (max ' + MAX_PTYS + ')');
+    const args = [mode];
+    if (session) args.push('-s', session);
+    if (mode === 'ssh') {
+      const keyInfo = await sshKeyReady;
+      if (!keyInfo.ok) return fail('SSH key is not ready: ' + keyInfo.error);
+      args.push('-i', SSH_KEY);
+    }
+    if (detached) return; // client left while we were waiting
+    console.log('[PTY] spawn colab ' + args.join(' ') + ' cols=' + cols + ' rows=' + rows + ' sid=' + sid);
+    try {
+      s = createPtySession(key, args, cols, rows);
+    } catch (err) {
+      return fail('Failed to spawn PTY: ' + err.message);
+    }
   }
-  activePtys.add(term);
+  if (detached) { s = null; return; }
 
-  send({ type: 'ready', data: { session: session || null, mode, cols, rows, pid: term.pid } });
+  s.ws = ws;
+  if (s.idleTimer) { clearTimeout(s.idleTimer); s.idleTimer = null; }
+  console.log('[PTY] ' + (attached ? 're-attach' : 'attach') + ' key=' + key);
 
   // Coalesce tiny PTY chunks into one WS frame (≈8 ms) and apply backpressure to the PTY
   // when the client can't keep up (slow mobile link + heavy output like pip/training logs).
-  let buf = '';
   const flush = () => {
     flushTimer = null;
     if (!buf) return;
@@ -1496,17 +1592,17 @@ wssPty.on('connection', async (ws, req) => {
     buf = '';
     send({ type: 'stdout', data });
     if (!resumeTimer && ws.bufferedAmount > WS_HIGH_WATER) {
-      try { term.pause(); } catch (e) {}
+      try { s.term.pause(); } catch (e) {}
       resumeTimer = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount < WS_LOW_WATER) {
           clearInterval(resumeTimer);
           resumeTimer = null;
-          try { term.resume(); } catch (e) {}
+          try { s.term.resume(); } catch (e) {}
         }
       }, 50);
     }
   };
-  term.onData((data) => {
+  const live = (data) => {
     buf += data;
     if (buf.length >= 32768) {
       if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
@@ -1514,16 +1610,32 @@ wssPty.on('connection', async (ws, req) => {
     } else if (!flushTimer) {
       flushTimer = setTimeout(flush, 8);
     }
-  });
-
-  term.onExit(({ exitCode, signal }) => {
-    console.log('[PTY] exit code=' + exitCode + ' signal=' + signal);
+  };
+  s.onExit = (exitCode, signal) => {
     if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
     flush();
     send({ type: 'exit', exitCode, signal });
-    activePtys.delete(term);
     try { ws.close(1000, 'exit'); } catch (e) {}
-  });
+  };
+
+  if (attached) {
+    // keep this socket's size authoritative, then replay the current screen
+    try { s.term.resize(cols, rows); } catch (e) {}
+    if (s.xt) { try { s.xt.resize(cols, rows); } catch (e) {} }
+    send({ type: 'ready', data: { session: session || null, mode, cols, rows, pid: s.term.pid, attached: true } });
+    s.held = [];                       // output produced after this point is queued behind the snapshot
+    ptySnapshot(s, (snap) => {
+      if (s.ws !== ws || detached) return;
+      if (snap) send({ type: 'stdout', data: snap });
+      const held = s.held || [];
+      s.held = null;
+      s.onOutput = live;
+      for (const d of held) live(d);
+    });
+  } else {
+    s.onOutput = live;
+    send({ type: 'ready', data: { session: session || null, mode, cols, rows, pid: s.term.pid, attached: false } });
+  }
 
   for (const m of pending.splice(0)) handleMsg(m);
 });
@@ -1538,7 +1650,8 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('  node-pty:          ' + (pty ? 'YES' : 'NO'));
   console.log('  WEB_TOKEN gate:    ' + (WEB_TOKEN ? 'ON (open /?token=...)' : 'OFF'));
   console.log('  Line-exec WS:      /terminal?session=&api_key=');
-  console.log('  Real PTY WS:       /pty?session=&api_key=&cols=&rows=&mode=ssh');
+  console.log('  Real PTY WS:       /pty?session=&api_key=&cols=&rows=&mode=ssh&sid=');
+  console.log('  PTY keep-alive:    ' + Math.round(PTY_KEEP_MS / 60000) + ' min after disconnect');
   console.log('  SSH key:           ' + SSH_KEY);
   console.log('======================================================');
   console.log('');
