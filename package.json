@@ -1,6 +1,6 @@
 {
   "name": "colab-cli-northflank-backend",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Google Colab CLI Backend with real PTY terminal for Android / Web",
   "main": "server.js",
   "scripts": {
@@ -8,6 +8,8 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@xterm/addon-serialize": "^0.13.0",
+    "@xterm/headless": "^5.5.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "multer": "^1.4.5-lts.1",
