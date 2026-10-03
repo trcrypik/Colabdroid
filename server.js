@@ -151,7 +151,12 @@ function gateWebUi(req, res, next) {
 }
 
 app.use(gateWebUi);
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  // always revalidate the UI: stale cached index.html in a WebView/APK caused old, broken behaviour
+  setHeaders: (res, filePath) => {
+    if (/\.html?$/i.test(filePath)) res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+  }
+}));
 
 const checkApiKey = (req, res, next) => {
   if (!API_KEY) return next();
