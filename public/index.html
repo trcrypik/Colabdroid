@@ -357,6 +357,305 @@
       box-shadow: 0 0 8px var(--cyan) !important;
     }
 
+    /* Floating Commands & Scripts Pad (matches KEYPAD style) */
+    .commands-pad {
+      position: fixed;
+      bottom: 24px;
+      right: 240px;
+      width: 275px;
+      max-width: calc(100vw - 16px);
+      background: rgba(13, 18, 29, 0.96);
+      border: 1px solid rgba(0, 240, 255, 0.45);
+      border-radius: 6px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 240, 255, 0.22);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 9998;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+      touch-action: none;
+    }
+    .commands-pad-header {
+      background: #090d14;
+      border-bottom: 1px solid var(--border);
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: grab;
+      touch-action: none;
+    }
+    .commands-pad-header:active {
+      cursor: grabbing;
+    }
+    .commands-pad-title {
+      font-size: 11px;
+      font-weight: bold;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+    }
+    .commands-pad-title .drag-icon {
+      color: #8892b0;
+      font-size: 10px;
+    }
+    .commands-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .commands-btn-action {
+      background: rgba(0, 240, 255, 0.12);
+      border: 1px solid rgba(0, 240, 255, 0.4);
+      color: var(--cyan);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: bold;
+      padding: 2px 7px;
+      border-radius: 3px;
+      cursor: pointer;
+      line-height: 1.3;
+      transition: all 0.15s ease;
+    }
+    .commands-btn-action:hover {
+      background: rgba(0, 240, 255, 0.28);
+      border-color: var(--cyan);
+      color: #ffffff;
+      box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+    }
+    .commands-pad-close {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--red);
+      font-size: 13px;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .commands-pad-close:hover {
+      background: rgba(255, 51, 102, 0.25);
+      border-color: var(--red);
+    }
+    .commands-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px;
+      background: #06080d;
+      max-height: 320px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+    }
+    .commands-list::-webkit-scrollbar {
+      width: 5px;
+    }
+    .commands-list::-webkit-scrollbar-track {
+      background: #06080d;
+    }
+    .commands-list::-webkit-scrollbar-thumb {
+      background: #1f2b3e;
+      border-radius: 3px;
+    }
+    .commands-list::-webkit-scrollbar-thumb:hover {
+      background: var(--cyan);
+    }
+    .commands-empty {
+      color: #718096;
+      font-size: 11px;
+      text-align: center;
+      padding: 20px 8px;
+      font-family: var(--font-mono);
+    }
+    .cmd-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      min-height: 38px;
+      padding: 2px 4px 2px 6px;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+    .cmd-item:hover {
+      border-color: rgba(0, 240, 255, 0.4);
+      background: rgba(13, 18, 29, 0.9);
+    }
+    .cmd-item.cmd-dragging {
+      opacity: 0.35;
+      border: 1px dashed var(--cyan);
+    }
+    .cmd-item.drag-over {
+      border-color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
+      background: rgba(0, 240, 255, 0.12);
+      transform: translateY(-2px);
+    }
+    .cmd-drag-handle {
+      color: #4a5568;
+      cursor: grab;
+      font-size: 11px;
+      padding: 0 2px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      flex-shrink: 0;
+    }
+    .cmd-drag-handle:hover {
+      color: var(--cyan);
+    }
+    .cmd-drag-handle:active {
+      cursor: grabbing;
+    }
+    .cmd-run-btn {
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+      border: none;
+      color: #d1d5db;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: bold;
+      text-align: left;
+      padding: 6px 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 3px;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .cmd-run-btn:hover {
+      color: #ffffff;
+      text-shadow: 0 0 6px rgba(0, 240, 255, 0.5);
+    }
+    .cmd-run-btn:active {
+      transform: scale(0.97);
+      background: rgba(0, 255, 102, 0.25);
+      color: var(--text);
+    }
+    .cmd-run-icon {
+      color: var(--cyan);
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+    .cmd-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+    .cmd-item-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .cmd-icon-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #8892b0;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      width: 22px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 3px;
+      padding: 0;
+      transition: all 0.12s ease;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .cmd-icon-btn:hover {
+      color: #ffffff;
+      border-color: var(--border);
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .cmd-icon-btn.btn-edit:hover {
+      color: var(--amber);
+      border-color: rgba(255, 176, 0, 0.4);
+      background: rgba(255, 176, 0, 0.15);
+    }
+    .cmd-icon-btn.btn-del:hover {
+      color: var(--red);
+      border-color: rgba(255, 51, 102, 0.4);
+      background: rgba(255, 51, 102, 0.15);
+    }
+    @media (max-width: 600px) {
+      .commands-pad {
+        width: 250px;
+        right: 10px;
+      }
+    }
+
+    .commands-pad button:focus, .commands-pad button:focus-visible { outline: none; }
+    .commands-pad button { -webkit-tap-highlight-color: transparent; }
+    @media (hover: none), (pointer: coarse) {
+      .commands-btn-action:hover { background: rgba(0,240,255,0.12); border-color: rgba(0,240,255,0.4); color: var(--cyan); box-shadow: none; }
+      .commands-pad-close:hover { background: transparent; border-color: transparent; }
+      .cmd-item:hover { border-color: var(--border); background: var(--card-bg); }
+      .cmd-drag-handle:hover { color: #4a5568; }
+      .cmd-run-btn:hover { color: #d1d5db; text-shadow: none; }
+      .cmd-icon-btn:hover, .cmd-icon-btn.btn-edit:hover, .cmd-icon-btn.btn-del:hover { color: #8892b0; border-color: transparent; background: transparent; }
+    }
+
+    /* Template Edit/Create Modal */
+    .cmd-modal-window {
+      width: 460px;
+      max-width: 95vw;
+      background: var(--card-bg);
+      border: 1px solid var(--cyan);
+      border-radius: 6px;
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.25), 0 20px 60px rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: extModalFadeIn 0.15s ease-out;
+    }
+    .cmd-modal-header {
+      background: #090d14;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .cmd-modal-title {
+      font-size: 12px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .cmd-modal-body {
+      padding: 14px;
+      background: var(--card-bg);
+    }
+    .cmd-modal-footer {
+      background: #090d14;
+      border-top: 1px solid var(--border);
+      padding: 10px 14px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
     /* External link / auth modal window */
     .ext-modal-backdrop {
       position: fixed;
@@ -529,13 +828,13 @@
     <!-- TERMINAL -->
     <div id="tab-terminal" class="tab-content active">
       <div class="term-toolbar">
-        <button class="btn active-mode" id="btnModePty" type="button" onclick="setTermMode('pty')">[SSH/REAL_SHELL]</button>
+        <button class="btn active-mode" id="btnModePty" type="button" onclick="setTermMode('pty')">[SSH/SHELL]</button>
         <button class="btn" id="btnModeExec" type="button" onclick="setTermMode('exec')">[LINE-EXEC]</button>
         <button class="btn btn-cyan" type="button" onclick="reconnectTerm()">[RECONNECT]</button>
         <button class="btn btn-danger" type="button" onclick="disconnectTerm()">[DISCONNECT]</button>
         <button class="btn btn-danger" type="button" onclick="killShell()" title="Kill the running shell on the server (a new one starts on RECONNECT)">[KILL_SHELL]</button>
         <button class="btn btn-cyan" id="btnArrowsToggle" type="button" onclick="toggleArrowsPanel()" title="Toggle Virtual Arrow & Function Keypad">[KEYPAD]</button>
-        <button class="btn" type="button" onclick="clearTerminal()">[CLEAR]</button>
+        <button class="btn btn-cyan" id="btnCommandsToggle" type="button" onclick="toggleCommandsPanel()" title="Toggle Command & Script Templates">[COMMANDS]</button>
         <button class="btn btn-cyan" type="button" onclick="toggleSelectMode()">[SELECT_TEXT]</button>
         <label class="hint" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Optional: run NEW shells inside tmux (the server already keeps shells alive between reconnects)"><input type="checkbox" id="chkTmux" onchange="localStorage.setItem('colab_tmux', this.checked ? '1' : '0')"> tmux</label>
         <span class="hint">Mobile: [SELECT_TEXT] for selection handles. Drive mount: use NOTEBOOKS tab 2-step auth.</span>
@@ -549,6 +848,15 @@
         <div class="terminal-header">
           <span id="termHeaderTitle">SSH // colab ssh (xterm.js)</span>
           <span id="termStatus">OFFLINE</span>
+        </div>
+        <div id="termLinkChip" style="display:none;flex-direction:column;gap:6px;padding:6px 10px;background:rgba(255,176,0,0.10);border-bottom:1px solid var(--amber);font-size:11px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button class="btn btn-cyan" type="button" id="termLinkOpenBtn" style="flex:0 0 auto;">[OPEN URL]</button>
+            <button class="btn btn-cyan" type="button" id="termLinkCopyBtn" style="flex:0 0 auto;">[COPY]</button>
+            <span id="termLinkHost" title="Show / hide full URL" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--amber);cursor:pointer;text-align:right;"></span>
+            <button class="btn" type="button" onclick="dismissTermLink()" title="Hide" aria-label="Hide" style="flex:0 0 auto;">✕</button>
+          </div>
+          <textarea id="termLinkFull" readonly rows="4" style="display:none;width:100%;font-size:11px;word-break:break-all;"></textarea>
         </div>
         <div id="xtermBox"></div>
         <pre id="selectModePanel" class="terminal-logs" style="display:none;margin:0;flex:1;min-height:0;user-select:text;-webkit-user-select:text;-webkit-touch-callout:default;cursor:text;"></pre>
@@ -734,6 +1042,58 @@
         <span>ALT</span>
         <span class="key-mod-led" id="ledAlt"></span>
       </button>
+    </div>
+  </div>
+
+  <!-- FLOATING COMMANDS & SCRIPTS PAD -->
+  <div id="commandsFloatingPad" class="commands-pad" style="display:none;" aria-label="Commands and scripts templates">
+    <div class="commands-pad-header" id="commandsPadHeader" title="Drag to move commands panel">
+      <div class="commands-pad-title">
+        <span class="drag-icon">⋮⋮</span>
+        <span>COMMANDS</span>
+      </div>
+      <div class="commands-header-actions">
+        <button class="commands-btn-action" id="btnNewCommand" type="button" onclick="openCommandModal()" title="Add new command/script template">+ NEW</button>
+        <button class="commands-pad-close" type="button" onclick="toggleCommandsPanel(false)" title="Close commands panel">✕</button>
+      </div>
+    </div>
+    <div class="commands-list" id="commandsList">
+      <!-- Items generated by renderCommandTemplates() -->
+    </div>
+  </div>
+
+  <!-- COMMAND TEMPLATE MODAL -->
+  <div id="cmdModal" class="ext-modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cmdModalTitle">
+    <div class="cmd-modal-window">
+      <div class="cmd-modal-header">
+        <div class="cmd-modal-title" id="cmdModalTitle">
+          <span style="color:var(--cyan);font-weight:bold;">[TEMPLATE]</span>
+          <span id="cmdModalHeading">EDIT TEMPLATE</span>
+        </div>
+        <button class="arrows-pad-close" type="button" onclick="closeCommandModal()" title="Close modal">✕</button>
+      </div>
+      <form id="cmdModalForm" onsubmit="saveCommandTemplate(event)">
+        <div class="cmd-modal-body">
+          <input type="hidden" id="cmdTemplateId" value="" />
+          <div style="margin-bottom:12px;">
+            <label class="stat-label" for="cmdTemplateName" style="display:block;margin-bottom:4px;">NAME</label>
+            <input type="text" id="cmdTemplateName" placeholder="e.g. GPU Status" required autocomplete="off" />
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <label class="stat-label" for="cmdTemplateCode">COMMAND / SCRIPT</label>
+              <button type="button" class="btn" style="padding:2px 8px;font-size:10px;" onclick="copyModalTemplateCode()" title="Copy command text">[COPY]</button>
+            </div>
+            <textarea id="cmdTemplateCode" rows="8" placeholder="e.g. nvidia-smi&#10;&#10;# Or multi-line script:&#10;echo 'Running task...'&#10;python3 train.py" required spellcheck="false" style="font-family:var(--font-mono);resize:vertical;"></textarea>
+          </div>
+        </div>
+        <div class="cmd-modal-footer">
+          <button type="submit" class="btn btn-cyan" id="cmdModalSaveBtn">[SAVE]</button>
+          <button type="button" class="btn" onclick="executeFromModal()" title="Run command immediately in terminal">[RUN NOW]</button>
+          <button type="button" class="btn" onclick="closeCommandModal()">[CANCEL]</button>
+          <button type="button" class="btn btn-danger" id="cmdModalDeleteBtn" style="margin-left:auto;display:none;" onclick="deleteActiveFromModal()">[DELETE]</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -931,8 +1291,112 @@
         .replace(/\r/g, '')
         .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
     }
+    // ---- Auth-link chip: one tap opens / copies the login URL the CLI printed ----
+    // The URL is rebuilt from xterm's screen buffer (what the user actually sees), NOT from the raw
+    // output stream: TUIs redraw the same URL many times, and stripping escapes glued those copies
+    // together ("...client_id=X...https://...client_id=X" -> Google: "parameters can only have a single value").
+    let termLinkUrl = '', termLinkDismissed = '', termLinkTimer = null;
+    function termScreenLines() {
+      if (typeof term === 'undefined' || !term || !term.buffer || !term.buffer.active) return null;
+      const buf = term.buffer.active;
+      const cols = term.cols || 80;
+      const start = Math.max(0, buf.length - 300);
+      const lines = [];
+      const lastRow = [];   // length of the last physical row of each logical line
+      for (let i = start; i < buf.length; i++) {
+        const line = buf.getLine(i);
+        if (!line) continue;
+        let t = line.translateToString(true);
+        if (line.isWrapped && lines.length) { lines[lines.length - 1] += t; lastRow[lastRow.length - 1] = t.length; }
+        else { lines.push(t); lastRow.push(t.length); }
+      }
+      // strip TUI side borders, then glue app-wrapped URLs (row filled to the edge + next row is one bare token)
+      const clean = lines.map(l => l.replace(/^\s*[│┃|]\s?/, '').replace(/\s?[│┃|]\s*$/, ''));
+      const out = [];
+      for (let i = 0; i < clean.length; i++) {
+        let cur = clean[i];
+        let lr = lastRow[i];
+        while (/https?:\/\//.test(cur) && !/\s/.test(cur.trim().slice(cur.trim().lastIndexOf('http'))) &&
+               i + 1 < clean.length && lr >= cols - 6 &&
+               clean[i + 1].trim() && !/\s/.test(clean[i + 1].trim())) {
+          cur += clean[++i].trim();
+          lr = lastRow[i];
+        }
+        out.push(cur);
+      }
+      return out;
+    }
+    function pickAuthUrl(text) {
+      // each match stops at whitespace OR at the start of the next URL
+      const re = /https?:\/\/(?:(?!https?:\/\/)[^\s"'<>\u0000-\u001f\u007f])+/g;
+      let m, found = '';
+      while ((m = re.exec(text))) {
+        const u = m[0].replace(/[.,;:)\]}]+$/, '');
+        if (/accounts\.google\.com|oauth|\/auth|login|signin|device|antigravity|authorize/i.test(u)) found = u;
+      }
+      return found;
+    }
+    function scanTermLinks() {
+      termLinkTimer = null;
+      const chip = document.getElementById('termLinkChip');
+      if (!chip) return;
+      let url = '';
+      const lines = termScreenLines();
+      if (lines) url = pickAuthUrl(lines.join('\n'));
+      if (!url) url = pickAuthUrl(stripAnsi(termTranscript.slice(-8000)).replace(/\r?\n/g, '\n'));
+      if (!url || url === termLinkDismissed) { termLinkUrl = ''; chip.style.display = 'none'; return; }
+      termLinkUrl = url;
+      let host = url;
+      try { host = new URL(url).host; } catch (_) {}
+      document.getElementById('termLinkHost').textContent = host + ' (' + url.length + ' chars)';
+      const full = document.getElementById('termLinkFull');
+      if (full) full.value = url;
+      chip.style.display = 'flex';
+    }
+    function dismissTermLink() {
+      termLinkDismissed = termLinkUrl;
+      termLinkUrl = '';
+      document.getElementById('termLinkChip').style.display = 'none';
+    }
+    function copyUrlText(text) {
+      const fallback = () => {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+          document.body.appendChild(ta);
+          ta.select();
+          ta.setSelectionRange(0, text.length);
+          const ok = document.execCommand('copy');
+          ta.remove();
+          return ok;
+        } catch (e) { return false; }
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text).then(() => true).catch(() => fallback());
+      }
+      return Promise.resolve(fallback());
+    }
+    function initTermLinkChip() {
+      const openBtn = document.getElementById('termLinkOpenBtn');
+      const copyBtn = document.getElementById('termLinkCopyBtn');
+      const host = document.getElementById('termLinkHost');
+      const full = document.getElementById('termLinkFull');
+      if (openBtn) openBtn.onclick = () => { if (termLinkUrl) openExtModal(termLinkUrl); };
+      if (copyBtn) copyBtn.onclick = () => {
+        if (!termLinkUrl) return;
+        copyUrlText(termLinkUrl).then((ok) => {
+          setStatus(ok ? 'LINK COPIED' : 'COPY FAILED — long-press the URL field', ok ? 'var(--cyan)' : 'var(--amber)');
+          if (!ok && full) { full.style.display = 'block'; full.focus(); full.select(); }
+        });
+      };
+      if (host && full) host.onclick = () => { full.style.display = full.style.display === 'none' ? 'block' : 'none'; };
+    }
+
     function appendTranscript(chunk) {
       termTranscript += chunk;
+      if (!termLinkTimer) termLinkTimer = setTimeout(scanTermLinks, 300);
       if (termTranscript.length > 400000) {
         termTranscript = termTranscript.slice(-300000);
       }
@@ -1496,6 +1960,375 @@
           pad.style.bottom = 'auto';
         }
       } catch (_) {}
+    }
+
+    // ---- Command & Script Templates Logic ----
+    const DEFAULT_COMMAND_TEMPLATES = [
+      { id: 'tpl_gpu', name: 'GPU Status', command: 'nvidia-smi' },
+      { id: 'tpl_disk', name: 'Disk Space', command: 'df -h' },
+      { id: 'tpl_top', name: 'System Top', command: 'top -b -n 1 | head -n 25' },
+      { id: 'tpl_ls', name: 'List Files', command: 'ls -la' },
+      { id: 'tpl_py', name: 'Python Info', command: 'python3 -V && which python3' },
+      { id: 'tpl_kill', name: 'Kill Python', command: 'pkill -9 -f python' }
+    ];
+
+    let commandTemplates = [];
+    let draggedCmdId = null;
+
+    function escapeCmdHtml(str) {
+      if (typeof str !== 'string') return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function loadCommandTemplates() {
+      try {
+        const raw = localStorage.getItem('colab_commands_templates');
+        if (raw === null) {
+          commandTemplates = JSON.parse(JSON.stringify(DEFAULT_COMMAND_TEMPLATES));
+          saveCommandTemplates();
+        } else {
+          commandTemplates = JSON.parse(raw) || [];
+        }
+      } catch (e) {
+        commandTemplates = JSON.parse(JSON.stringify(DEFAULT_COMMAND_TEMPLATES));
+      }
+    }
+
+    function saveCommandTemplates() {
+      try {
+        localStorage.setItem('colab_commands_templates', JSON.stringify(commandTemplates));
+      } catch (_) {}
+    }
+
+    function renderCommandTemplates() {
+      const listEl = document.getElementById('commandsList');
+      if (!listEl) return;
+      if (!commandTemplates || commandTemplates.length === 0) {
+        listEl.innerHTML = '<div class="commands-empty">No templates yet.<br><button type="button" class="btn btn-cyan" onclick="openCommandModal()" style="margin-top:8px;">[+ ADD TEMPLATE]</button></div>';
+        return;
+      }
+      let html = '';
+      commandTemplates.forEach((item) => {
+        html += `
+          <div class="cmd-item" draggable="true" data-id="${item.id}" id="cmdItem_${item.id}">
+            <span class="cmd-drag-handle" title="Drag to reorder">⋮⋮</span>
+            <button class="cmd-run-btn" type="button" title="Run: ${escapeCmdHtml(item.name)}" onclick="executeCommandTemplate('${item.id}')">
+              <span class="cmd-run-icon">▶</span>
+              <span class="cmd-name">${escapeCmdHtml(item.name)}</span>
+            </button>
+            <div class="cmd-item-actions">
+              <button class="cmd-icon-btn btn-edit" type="button" title="Edit Template" onclick="openCommandModal('${item.id}')">✎</button>
+              <button class="cmd-icon-btn btn-del" type="button" title="Delete Template" onclick="deleteCommandTemplate('${item.id}')">✕</button>
+            </div>
+          </div>
+        `;
+      });
+      listEl.innerHTML = html;
+      initCmdDragAndDrop();
+    }
+
+    function toggleCommandsPanel(force) {
+      const pad = document.getElementById('commandsFloatingPad');
+      const btn = document.getElementById('btnCommandsToggle');
+      if (!pad) return;
+      let show = (typeof force === 'boolean') ? force : (pad.style.display === 'none' || !pad.style.display);
+      pad.style.display = show ? 'flex' : 'none';
+      if (btn) btn.classList.toggle('active-mode', show);
+      if (show) {
+        requestAnimationFrame(() => {
+          const rect = pad.getBoundingClientRect();
+          if (rect.right > window.innerWidth || rect.bottom > window.innerHeight || rect.left < 0 || rect.top < 0) {
+            if (window.innerWidth < 560) {
+              pad.style.right = '12px';
+              pad.style.bottom = '64px';
+              pad.style.left = 'auto';
+              pad.style.top = 'auto';
+            } else {
+              pad.style.right = '240px';
+              pad.style.bottom = '24px';
+              pad.style.left = 'auto';
+              pad.style.top = 'auto';
+            }
+          }
+        });
+      }
+    }
+
+    function executeCommandTemplate(id) {
+      const item = commandTemplates.find(t => t.id === id);
+      if (!item) return;
+      runTemplateCode(item.command, item.name);
+    }
+
+    function runTemplateCode(code, label) {
+      if (!code) return;
+      try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+
+      // Ensure terminal tab is active
+      const tabTerm = document.getElementById('tab-terminal');
+      if (tabTerm && !tabTerm.classList.contains('active')) {
+        const termNavBtn = document.querySelector('nav .tab-btn:first-child');
+        if (typeof switchTab === 'function') switchTab('terminal', termNavBtn ? { target: termNavBtn } : null);
+      }
+
+      if (termMode === 'pty') {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          // Normalize newlines for PTY input: in terminal PTY, carriage returns trigger newline execution
+          const ptyData = code.replace(/\r\n/g, '\r').replace(/\n/g, '\r') + '\r';
+          ws.send(JSON.stringify({ type: 'stdin', data: ptyData }));
+          setStatus((label ? label.toUpperCase() : 'COMMAND') + ' SENT', 'var(--text)');
+          // no term.focus(): focusing xterm's hidden textarea pops up the on-screen keyboard
+        } else {
+          setStatus('PTY OFFLINE', 'var(--amber)');
+        }
+      } else {
+        // Line-exec mode: preserves newlines so server can run %%bash multiline block
+        const cleanCmd = code.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const logs = document.getElementById('terminalLogs');
+        if (logs) {
+          logs.textContent += '\nexec# ' + cleanCmd + '\n';
+          logs.scrollTop = logs.scrollHeight;
+        }
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'exec', command: cleanCmd, session: activeSession, isBash: true }));
+          setStatus((label ? label.toUpperCase() : 'EXEC') + ' SENT', 'var(--text)');
+        } else {
+          setStatus('EXEC OFFLINE', 'var(--amber)');
+        }
+      }
+    }
+
+    function deleteCommandTemplate(id) {
+      const item = commandTemplates.find(t => t.id === id);
+      if (!item) return;
+      if (!confirm(`Delete template "${item.name}"?`)) return;
+      commandTemplates = commandTemplates.filter(t => t.id !== id);
+      saveCommandTemplates();
+      renderCommandTemplates();
+      setStatus('DELETED: ' + item.name, 'var(--red)');
+    }
+
+    function openCommandModal(id) {
+      const modal = document.getElementById('cmdModal');
+      const heading = document.getElementById('cmdModalHeading');
+      const idInput = document.getElementById('cmdTemplateId');
+      const nameInput = document.getElementById('cmdTemplateName');
+      const codeInput = document.getElementById('cmdTemplateCode');
+      const delBtn = document.getElementById('cmdModalDeleteBtn');
+      if (!modal) return;
+
+      if (id) {
+        const item = commandTemplates.find(t => t.id === id);
+        if (!item) return;
+        heading.textContent = 'EDIT TEMPLATE';
+        idInput.value = item.id;
+        nameInput.value = item.name;
+        codeInput.value = item.command;
+        if (delBtn) delBtn.style.display = 'inline-block';
+      } else {
+        heading.textContent = 'NEW TEMPLATE';
+        idInput.value = '';
+        nameInput.value = '';
+        codeInput.value = '';
+        if (delBtn) delBtn.style.display = 'none';
+      }
+
+      modal.style.display = 'flex';
+      setTimeout(() => { nameInput.focus(); }, 50);
+    }
+
+    function closeCommandModal() {
+      const modal = document.getElementById('cmdModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function saveCommandTemplate(e) {
+      if (e) e.preventDefault();
+      const id = document.getElementById('cmdTemplateId').value.trim();
+      const name = document.getElementById('cmdTemplateName').value.trim();
+      const code = document.getElementById('cmdTemplateCode').value;
+      if (!name) {
+        alert('Please enter a template name');
+        return;
+      }
+      if (!code.trim()) {
+        alert('Please enter a command or script');
+        return;
+      }
+
+      if (id) {
+        const item = commandTemplates.find(t => t.id === id);
+        if (item) {
+          item.name = name;
+          item.command = code;
+        }
+      } else {
+        const newId = 'tpl_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+        commandTemplates.push({ id: newId, name, command: code });
+      }
+
+      saveCommandTemplates();
+      renderCommandTemplates();
+      closeCommandModal();
+      setStatus('SAVED: ' + name, 'var(--text)');
+    }
+
+    function deleteActiveFromModal() {
+      const id = document.getElementById('cmdTemplateId').value.trim();
+      if (!id) return;
+      deleteCommandTemplate(id);
+      closeCommandModal();
+    }
+
+    function executeFromModal() {
+      const name = document.getElementById('cmdTemplateName').value.trim() || 'Command';
+      const code = document.getElementById('cmdTemplateCode').value;
+      if (!code.trim()) {
+        alert('Command/script is empty');
+        return;
+      }
+      closeCommandModal();
+      runTemplateCode(code, name);
+    }
+
+    function copyModalTemplateCode() {
+      const code = document.getElementById('cmdTemplateCode').value;
+      if (!code) return;
+      navigator.clipboard.writeText(code).then(() => {
+        setStatus('COPIED TO CLIPBOARD', 'var(--cyan)');
+      }).catch(() => {});
+    }
+
+    function initCmdDragAndDrop() {
+      const listEl = document.getElementById('commandsList');
+      if (!listEl) return;
+      const items = listEl.querySelectorAll('.cmd-item');
+      items.forEach(item => {
+        item.addEventListener('dragstart', function(e) {
+          draggedCmdId = this.getAttribute('data-id');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', draggedCmdId);
+          this.classList.add('cmd-dragging');
+        });
+        item.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          const target = e.target.closest('.cmd-item');
+          if (target && target.getAttribute('data-id') !== draggedCmdId) {
+            target.classList.add('drag-over');
+          }
+        });
+        item.addEventListener('dragleave', function(e) {
+          const target = e.target.closest('.cmd-item');
+          if (target) target.classList.remove('drag-over');
+        });
+        item.addEventListener('drop', function(e) {
+          e.preventDefault();
+          const target = e.target.closest('.cmd-item');
+          if (!target) return;
+          target.classList.remove('drag-over');
+          const targetId = target.getAttribute('data-id');
+          if (!draggedCmdId || draggedCmdId === targetId) return;
+
+          const srcIdx = commandTemplates.findIndex(t => t.id === draggedCmdId);
+          const tgtIdx = commandTemplates.findIndex(t => t.id === targetId);
+          if (srcIdx === -1 || tgtIdx === -1) return;
+
+          const [moved] = commandTemplates.splice(srcIdx, 1);
+          commandTemplates.splice(tgtIdx, 0, moved);
+          saveCommandTemplates();
+          renderCommandTemplates();
+        });
+        item.addEventListener('dragend', function() {
+          draggedCmdId = null;
+          items.forEach(el => el.classList.remove('cmd-dragging', 'drag-over'));
+        });
+      });
+    }
+
+    function initCommandsPadDrag() {
+      const pad = document.getElementById('commandsFloatingPad');
+      const handle = document.getElementById('commandsPadHeader');
+      if (!pad || !handle) return;
+
+      let isDragging = false;
+      let startX = 0, startY = 0;
+      let origX = 0, origY = 0;
+
+      handle.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.commands-pad-close') || e.target.closest('.commands-btn-action')) return;
+        isDragging = true;
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        const rect = pad.getBoundingClientRect();
+        startX = e.clientX;
+        startY = e.clientY;
+        origX = rect.left;
+        origY = rect.top;
+        e.preventDefault();
+      });
+
+      handle.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        let nx = origX + dx;
+        let ny = origY + dy;
+        const padRect = pad.getBoundingClientRect();
+        const maxX = window.innerWidth - padRect.width - 4;
+        const maxY = window.innerHeight - padRect.height - 4;
+        nx = Math.max(4, Math.min(maxX, nx));
+        ny = Math.max(4, Math.min(maxY, ny));
+        pad.style.left = nx + 'px';
+        pad.style.top = ny + 'px';
+        pad.style.right = 'auto';
+        pad.style.bottom = 'auto';
+      });
+
+      const stopDrag = (e) => {
+        if (isDragging) {
+          isDragging = false;
+          try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+          try {
+            localStorage.setItem('colab_commands_pos', JSON.stringify({
+              left: pad.style.left, top: pad.style.top
+            }));
+          } catch (_) {}
+        }
+      };
+      handle.addEventListener('pointerup', stopDrag);
+      handle.addEventListener('pointercancel', stopDrag);
+
+      try {
+        const saved = JSON.parse(localStorage.getItem('colab_commands_pos') || 'null');
+        if (saved && saved.left && saved.top) {
+          pad.style.left = saved.left;
+          pad.style.top = saved.top;
+          pad.style.right = 'auto';
+          pad.style.bottom = 'auto';
+        }
+      } catch (_) {}
+    }
+
+    function initCommandsPad() {
+      const cpad = document.getElementById('commandsFloatingPad');
+      if (cpad) {
+        const release = (e) => {
+          const b = e.target.closest && e.target.closest('button');
+          if (b) setTimeout(() => { try { b.blur(); } catch (_) {} }, 0);
+        };
+        cpad.addEventListener('pointerup', release);
+        cpad.addEventListener('pointercancel', release);
+      }
+      loadCommandTemplates();
+      renderCommandTemplates();
+      initCommandsPadDrag();
+
+      const modal = document.getElementById('cmdModal');
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) closeCommandModal();
+        });
+      }
     }
 
     function toggleSelectMode(force) {
@@ -2482,6 +3315,8 @@
         if (e.key === 'Escape') {
           const m = document.getElementById('extModal');
           if (m && m.style.display !== 'none') closeExtModal();
+          const cm = document.getElementById('cmdModal');
+          if (cm && cm.style.display !== 'none') closeCommandModal();
         }
       });
     }
@@ -2489,6 +3324,8 @@
     // init
     initExtModal();
     initArrowsPadDrag();
+    initCommandsPad();
+    initTermLinkChip();
     { const c = document.getElementById('chkTmux'); if (c) c.checked = localStorage.getItem('colab_tmux') === '1'; }
     updateSessionLabel();
     loadConnectionCfgIntoForm();
