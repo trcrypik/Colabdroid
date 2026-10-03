@@ -31,6 +31,18 @@
     }
     .brand { font-size: 15px; font-weight: bold; letter-spacing: 1px; display: flex; gap: 8px; align-items: center;
       text-shadow: 0 0 8px rgba(0,255,102,0.4); }
+    .sys-badge { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; padding: 3px 8px;
+      border: 1px solid var(--border); border-radius: 3px; font-size: 12px; background: rgba(0,240,255,0.05);
+      font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .sys-badge #sysClock { color: var(--cyan); font-weight: bold; letter-spacing: 0.5px; }
+    .sys-badge #sysBattery.bat-low { color: var(--amber); }
+    .sys-badge #sysBattery.bat-crit { color: var(--red); }
+    .sys-badge #sysBattery.bat-chg { color: var(--text); }
+    @media (max-width: 700px) {
+      header > .brand { flex: 1 1 auto; }
+      header > .sys-badge { order: 2; }
+      header > .hdr-status { order: 3; flex-basis: 100%; }
+    }
     .status-badge {
       display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px;
       border: 1px solid var(--border); border-radius: 3px; font-size: 11px;
@@ -779,7 +791,7 @@
 <body>
   <header>
     <div class="brand"><span>[⚡]</span><span>COLAB CLI // SSH PTY</span></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <div class="hdr-status" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <div id="authStatusBadge" class="status-badge">
         <span class="dot offline"></span><span id="authStatusText">AUTH CHECK</span>
       </div>
@@ -787,6 +799,10 @@
         <span id="currentSessionLabel">DEFAULT</span></div>
       <div class="status-badge"><span style="color:var(--cyan);">TERM:</span>
         <span id="termModeLabel">SSH</span></div>
+    </div>
+    <div class="sys-badge" title="Device time / battery">
+      <span id="sysClock">--:--</span>
+      <span id="sysBattery" style="display:none;"></span>
     </div>
   </header>
 
@@ -1318,7 +1334,7 @@
         let lr = lastRow[i];
         while (/https?:\/\//.test(cur) && !/\s/.test(cur.trim().slice(cur.trim().lastIndexOf('http'))) &&
                i + 1 < clean.length && lr >= cols - 6 &&
-               clean[i + 1].trim() && !/\s/.test(clean[i + 1].trim())) {
+               /^[\x21\x23-\x26\x28-\x3b\x3d\x3f-\x7e]+$/.test(clean[i + 1].trim())) {
           cur += clean[++i].trim();
           lr = lastRow[i];
         }
@@ -1328,7 +1344,7 @@
     }
     function pickAuthUrl(text) {
       // each match stops at whitespace OR at the start of the next URL
-      const re = /https?:\/\/(?:(?!https?:\/\/)[^\s"'<>\u0000-\u001f\u007f])+/g;
+      const re = /https?:\/\/(?:(?!https?:\/\/)[\x21\x23-\x26\x28-\x3b\x3d\x3f-\x7e])+/g;
       let m, found = '';
       while ((m = re.exec(text))) {
         const u = m[0].replace(/[.,;:)\]}]+$/, '');
@@ -3321,7 +3337,38 @@
       });
     }
 
+    // ---- Clock + battery in the header ----
+    function initSysBadge() {
+      const clock = document.getElementById('sysClock');
+      const bat = document.getElementById('sysBattery');
+      const pad2 = (n) => (n < 10 ? '0' : '') + n;
+      const tick = () => {
+        if (!clock) return;
+        const d = new Date();
+        clock.textContent = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+      };
+      tick();
+      setInterval(tick, 1000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+
+      if (!bat || typeof navigator.getBattery !== 'function') return;   // not supported (e.g. iOS / insecure origin)
+      navigator.getBattery().then((b) => {
+        const draw = () => {
+          const pct = Math.round((b.level || 0) * 100);
+          bat.textContent = (b.charging ? '⚡' : '') + 'BAT ' + pct + '%';
+          bat.className = b.charging ? 'bat-chg' : (pct <= 15 ? 'bat-crit' : (pct <= 30 ? 'bat-low' : ''));
+          bat.title = b.charging ? 'Charging' : 'On battery';
+          bat.style.display = '';
+        };
+        draw();
+        b.addEventListener('levelchange', draw);
+        b.addEventListener('chargingchange', draw);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) draw(); });
+      }).catch(() => {});
+    }
+
     // init
+    initSysBadge();
     initExtModal();
     initArrowsPadDrag();
     initCommandsPad();
