@@ -11,14 +11,18 @@
       --text: #00ff66; --text-dim: #00993d; --cyan: #00f0ff;
       --amber: #ffb000; --red: #ff3366; --dark: #050608;
       --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      --ui-font-size: 13px;
+      --ui-button-scale: 1;
+      --ui-font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; height: 100dvh; }
     body {
       background: var(--bg); color: var(--text);
-      font-family: var(--font-mono); font-size: 13px; line-height: 1.4;
+      font-family: var(--ui-font-family); font-size: var(--ui-font-size); line-height: 1.4;
       display: flex; flex-direction: column; overflow: hidden;
     }
+    button, input, select, textarea { font-family: inherit; }
     body::before {
       content: " "; position: fixed; inset: 0;
       background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%);
@@ -56,7 +60,8 @@
     }
     .tab-btn {
       background: transparent; border: 1px solid transparent; color: #718096;
-      padding: 6px 12px; font-family: inherit; font-size: 12px; cursor: pointer;
+      padding: calc(6px * var(--ui-button-scale)) calc(12px * var(--ui-button-scale));
+      font-family: inherit; font-size: calc(12px * var(--ui-button-scale)); cursor: pointer;
       text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
     }
     .tab-btn:hover { color: var(--text); border-color: var(--border); }
@@ -71,13 +76,14 @@
     .tab-content { display: none; flex-direction: column; flex: 1; min-height: 0; gap: 10px; overflow: hidden; }
     .tab-content.active { display: flex; }
     #tab-sessions.active, #tab-hardware.active, #tab-files.active,
-    #tab-auth.active, #tab-notebooks.active {
+    #tab-auth.active, #tab-notebooks.active, #tab-ui.active {
       overflow-y: auto; -webkit-overflow-scrolling: touch;
     }
     .term-toolbar { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .btn {
       background: var(--card-bg); border: 1px solid var(--border); color: var(--text);
-      padding: 6px 12px; font-family: inherit; font-size: 11px; cursor: pointer;
+      padding: calc(6px * var(--ui-button-scale)) calc(12px * var(--ui-button-scale));
+      font-family: inherit; font-size: calc(11px * var(--ui-button-scale)); cursor: pointer;
       text-transform: uppercase; letter-spacing: 0.5px;
     }
     .btn:hover { border-color: var(--text); background: rgba(0,255,102,0.1); }
@@ -101,7 +107,6 @@
     #xtermBox { flex: 1; min-height: 0; padding: 4px; overflow: hidden; }
     #xtermBox .xterm { height: 100%; }
     #xtermBox .xterm-viewport { overflow-y: auto !important; }
-    /* allow text selection / copy in xterm */
     #xtermBox, #xtermBox .xterm, #xtermBox .xterm-screen { user-select: text; -webkit-user-select: text; }
     #selectModePanel {
       user-select: text !important;
@@ -110,6 +115,7 @@
       white-space: pre-wrap;
       word-break: break-word;
       touch-action: pan-y;
+      font-size: var(--ui-font-size);
     }
     #selectModeBar { display: none; }
     #selectModeBar.on { display: flex !important; }
@@ -118,7 +124,8 @@
     #xtermBox.hidden { display: none; }
     .terminal-logs {
       flex: 1; min-height: 0; padding: 12px; overflow-y: auto;
-      white-space: pre-wrap; word-break: break-all; color: #d1d5db; font-size: 12px;
+      white-space: pre-wrap; word-break: break-all; color: #d1d5db;
+      font-size: var(--ui-font-size);
       user-select: text;
     }
     .terminal-input-bar {
@@ -128,7 +135,7 @@
     .prompt-label { color: var(--text); font-weight: bold; }
     .terminal-input {
       flex: 1; background: transparent; border: none; color: #fff;
-      font-family: inherit; font-size: 13px; outline: none;
+      font-family: inherit; font-size: var(--ui-font-size); outline: none;
     }
     .card {
       background: var(--card-bg); border: 1px solid var(--border); border-radius: 4px;
@@ -222,9 +229,7 @@
       cursor: grab;
       touch-action: none;
     }
-    .arrows-pad-header:active {
-      cursor: grabbing;
-    }
+    .arrows-pad-header:active { cursor: grabbing; }
     .arrows-pad-title {
       font-size: 11px;
       font-weight: bold;
@@ -235,10 +240,7 @@
       letter-spacing: 0.5px;
       pointer-events: none;
     }
-    .arrows-pad-title .drag-icon {
-      color: #8892b0;
-      font-size: 10px;
-    }
+    .arrows-pad-title .drag-icon { color: #8892b0; font-size: 10px; }
     .arrows-pad-close {
       background: transparent;
       border: 1px solid transparent;
@@ -369,7 +371,7 @@
       box-shadow: 0 0 8px var(--cyan) !important;
     }
 
-    /* Floating Commands & Scripts Pad (matches KEYPAD style) */
+    /* Floating Commands & Scripts Pad */
     .commands-pad {
       position: fixed;
       bottom: 24px;
@@ -400,9 +402,7 @@
       cursor: grab;
       touch-action: none;
     }
-    .commands-pad-header:active {
-      cursor: grabbing;
-    }
+    .commands-pad-header:active { cursor: grabbing; }
     .commands-pad-title {
       font-size: 11px;
       font-weight: bold;
@@ -413,15 +413,8 @@
       letter-spacing: 0.5px;
       pointer-events: none;
     }
-    .commands-pad-title .drag-icon {
-      color: #8892b0;
-      font-size: 10px;
-    }
-    .commands-header-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+    .commands-pad-title .drag-icon { color: #8892b0; font-size: 10px; }
+    .commands-header-actions { display: flex; align-items: center; gap: 6px; }
     .commands-btn-action {
       background: rgba(0, 240, 255, 0.12);
       border: 1px solid rgba(0, 240, 255, 0.4);
@@ -466,19 +459,10 @@
       overscroll-behavior: contain;
       touch-action: pan-y;
     }
-    .commands-list::-webkit-scrollbar {
-      width: 5px;
-    }
-    .commands-list::-webkit-scrollbar-track {
-      background: #06080d;
-    }
-    .commands-list::-webkit-scrollbar-thumb {
-      background: #1f2b3e;
-      border-radius: 3px;
-    }
-    .commands-list::-webkit-scrollbar-thumb:hover {
-      background: var(--cyan);
-    }
+    .commands-list::-webkit-scrollbar { width: 5px; }
+    .commands-list::-webkit-scrollbar-track { background: #06080d; }
+    .commands-list::-webkit-scrollbar-thumb { background: #1f2b3e; border-radius: 3px; }
+    .commands-list::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
     .commands-empty {
       color: #718096;
       font-size: 11px;
@@ -502,10 +486,7 @@
       border-color: rgba(0, 240, 255, 0.4);
       background: rgba(13, 18, 29, 0.9);
     }
-    .cmd-item.cmd-dragging {
-      opacity: 0.35;
-      border: 1px dashed var(--cyan);
-    }
+    .cmd-item.cmd-dragging { opacity: 0.35; border: 1px dashed var(--cyan); }
     .cmd-item.drag-over {
       border-color: var(--cyan);
       box-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
@@ -522,12 +503,8 @@
       touch-action: none;
       flex-shrink: 0;
     }
-    .cmd-drag-handle:hover {
-      color: var(--cyan);
-    }
-    .cmd-drag-handle:active {
-      cursor: grabbing;
-    }
+    .cmd-drag-handle:hover { color: var(--cyan); }
+    .cmd-drag-handle:active { cursor: grabbing; }
     .cmd-run-btn {
       flex: 1;
       min-width: 0;
@@ -548,32 +525,20 @@
       -webkit-user-select: none;
       touch-action: manipulation;
     }
-    .cmd-run-btn:hover {
-      color: #ffffff;
-      text-shadow: 0 0 6px rgba(0, 240, 255, 0.5);
-    }
+    .cmd-run-btn:hover { color: #ffffff; text-shadow: 0 0 6px rgba(0, 240, 255, 0.5); }
     .cmd-run-btn:active {
       transform: scale(0.97);
       background: rgba(0, 255, 102, 0.25);
       color: var(--text);
     }
-    .cmd-run-icon {
-      color: var(--cyan);
-      font-size: 10px;
-      flex-shrink: 0;
-    }
+    .cmd-run-icon { color: var(--cyan); font-size: 10px; flex-shrink: 0; }
     .cmd-name {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       flex: 1;
     }
-    .cmd-item-actions {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      flex-shrink: 0;
-    }
+    .cmd-item-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
     .cmd-icon-btn {
       background: transparent;
       border: 1px solid transparent;
@@ -608,12 +573,8 @@
       background: rgba(255, 51, 102, 0.15);
     }
     @media (max-width: 600px) {
-      .commands-pad {
-        width: 250px;
-        right: 10px;
-      }
+      .commands-pad { width: 250px; right: 10px; }
     }
-
     .commands-pad button:focus, .commands-pad button:focus-visible { outline: none; }
     .commands-pad button { -webkit-tap-highlight-color: transparent; }
     @media (hover: none), (pointer: coarse) {
@@ -700,13 +661,8 @@
       to { opacity: 1; transform: scale(1); }
     }
     @media (max-width: 768px) {
-      .ext-modal-backdrop {
-        padding: 6px;
-      }
-      .ext-modal-window {
-        width: 96vw;
-        height: 94vh;
-      }
+      .ext-modal-backdrop { padding: 6px; }
+      .ext-modal-window { width: 96vw; height: 94vh; }
     }
     .ext-modal-header {
       flex-shrink: 0;
@@ -737,12 +693,7 @@
       text-overflow: ellipsis;
       max-width: 45vw;
     }
-    .ext-modal-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-shrink: 0;
-    }
+    .ext-modal-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .ext-modal-close {
       color: var(--red) !important;
       border-color: rgba(255, 51, 102, 0.5) !important;
@@ -786,11 +737,42 @@
       border: none;
       background: #ffffff;
     }
+
+    @media (max-width: 700px) {
+      header {
+        padding: 5px 8px; gap: 4px;
+        display: grid; grid-template-columns: 1fr auto;
+      }
+      header > .brand { min-width: 0; font-size: 12px; letter-spacing: 0; }
+      header > .sys-badge { order: initial; grid-column: 2; grid-row: 1; margin: 0; font-size: 10px; }
+      header > .hdr-status {
+        order: initial; grid-column: 1 / -1; flex-basis: auto;
+        gap: 4px !important;
+      }
+      .status-badge { padding: 2px 5px; gap: 4px; font-size: 9px; }
+      nav { padding: 4px 6px; gap: 3px; }
+      .tab-btn { padding: 6px 8px; font-size: 10px; }
+      main { padding: 6px; gap: 6px; }
+      .term-toolbar { gap: 5px; }
+      .terminal-container { min-height: 0; }
+      .terminal-input-bar { gap: 4px; }
+      .terminal-input-bar .btn { padding-left: 8px; padding-right: 8px; }
+      .fm-path { align-items: stretch; }
+      .fm-path input { flex: 1 1 100%; min-width: 0; }
+      .fm-path .btn { flex: 1 1 auto; }
+      .arrows-pad { right: 8px; bottom: 8px; transform: scale(.82); transform-origin: bottom right; }
+      .commands-pad { right: 8px; bottom: 8px; max-height: 55dvh; }
+    }
+    @media (max-height: 600px) and (max-width: 900px) {
+      header { padding-top: 3px; padding-bottom: 3px; }
+      nav { padding-top: 2px; padding-bottom: 2px; }
+      main { padding-top: 4px; padding-bottom: 4px; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="brand"><span>[⚡]</span><span>COLAB CLI // SSH PTY</span></div>
+    <div class="brand"><span>[⚡]</span><span>COLAB CLI</span></div>
     <div class="hdr-status" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <div id="authStatusBadge" class="status-badge">
         <span class="dot offline"></span><span id="authStatusText">AUTH CHECK</span>
@@ -813,10 +795,11 @@
     <button class="tab-btn" onclick="switchTab('hardware', event)">[$HARDWARE]</button>
     <button class="tab-btn" onclick="switchTab('files', event)">[~FILES]</button>
     <button class="tab-btn" onclick="switchTab('auth', event)">[*AUTH&CONFIG]</button>
+    <button class="tab-btn" onclick="switchTab('ui', event)">[*INTERFACE]</button>
   </nav>
 
   <main>
-    <!-- GOOGLE AUTH PROMPT (shown when a colab command waits for "Enter the authorization code:") -->
+    <!-- GOOGLE AUTH PROMPT -->
     <div id="authBanner" class="card auth-banner" style="display:none;">
       <button class="auth-close" type="button" onclick="dismissAuthBanner()" title="Close" aria-label="Close">✕</button>
       <div class="card-title">
@@ -853,7 +836,6 @@
         <button class="btn btn-cyan" id="btnCommandsToggle" type="button" onclick="toggleCommandsPanel()" title="Toggle Command & Script Templates">[COMMANDS]</button>
         <button class="btn btn-cyan" type="button" onclick="toggleSelectMode()">[SELECT_TEXT]</button>
         <label class="hint" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Optional: run NEW shells inside tmux (the server already keeps shells alive between reconnects)"><input type="checkbox" id="chkTmux" onchange="localStorage.setItem('colab_tmux', this.checked ? '1' : '0')"> tmux</label>
-        <span class="hint">Mobile: [SELECT_TEXT] for selection handles. Drive mount: use NOTEBOOKS tab 2-step auth.</span>
       </div>
       <div id="selectModeBar" style="display:none;flex-shrink:0;gap:8px;align-items:center;flex-wrap:wrap;">
         <span class="hint" style="color:var(--cyan);">SELECT MODE — drag handles work on text below. [COPY_ALL] or long-press.</span>
@@ -1023,6 +1005,35 @@
         </div>
       </div>
     </div>
+
+    <!-- UI SETTINGS TAB -->
+    <div id="tab-ui" class="tab-content">
+      <div class="card">
+        <div class="card-title">НАСТРОЙКИ ИНТЕРФЕЙСА</div>
+        <p class="hint">Персональная настройка шрифта, размера текста (включая терминал и логи) и масштаба элементов управления.</p>
+        <div class="grid">
+          <div>
+            <label class="stat-label">ШРИФТ</label>
+            <select id="uiFontFamily">
+              <option value="mono">Моноширинный</option>
+              <option value="system">Системный</option>
+              <option value="serif">С засечками</option>
+            </select>
+          </div>
+          <div>
+            <label class="stat-label">РАЗМЕР ТЕКСТА: <span id="uiFontSizeValue" style="color:var(--cyan);">13</span>px</label>
+            <input id="uiFontSize" type="range" min="8" max="18" step="1" value="13" />
+          </div>
+          <div>
+            <label class="stat-label">РАЗМЕР КНОПОК: <span id="uiButtonScaleValue" style="color:var(--cyan);">100</span>%</label>
+            <input id="uiButtonScale" type="range" min="0.4" max="1.5" step="0.05" value="1" />
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+          <button class="btn btn-cyan" type="button" id="uiSettingsReset">[СБРОСИТЬ НАСТРОЙКИ]</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- FLOATING ARROWS / FUNCTION KEYPAD -->
@@ -1073,9 +1084,7 @@
         <button class="commands-pad-close" type="button" onclick="toggleCommandsPanel(false)" title="Close commands panel">✕</button>
       </div>
     </div>
-    <div class="commands-list" id="commandsList">
-      <!-- Items generated by renderCommandTemplates() -->
-    </div>
+    <div class="commands-list" id="commandsList"></div>
   </div>
 
   <!-- COMMAND TEMPLATE MODAL -->
@@ -1148,7 +1157,6 @@
   <script>
     let activeSession = localStorage.getItem('colab_active_session') || '';
     let termMode = localStorage.getItem('colab_term_mode') || 'pty';
-    // stable per-device id: lets the server re-attach this browser/APK to the same running shell
     let termSid = localStorage.getItem('colab_term_sid');
     if (!termSid) {
       termSid = 'd' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -1158,19 +1166,21 @@
     let fmPath = '/content';
     let termTranscript = '';
     let selectMode = false;
-    let ptyNoRetry = false;      // set after `exit` / fatal server error: do not auto-reconnect
-    // Virtual Modifier states for keypad
+    let ptyNoRetry = false;
     let virtualCtrlActive = false;
     let virtualAltActive = false;
     let reconnectAttempts = 0;
     let selectRefreshTimer = null;
 
-    // ---- External link & Auth modal window ----
+    const FONT_FAMILIES = {
+      mono: "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
+      system: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      serif: "Georgia, 'Times New Roman', serif"
+    };
+
     let currentExtUrl = '';
     const _origWindowOpen = window.open;
 
-    // Only same-origin pages can be shown in the iframe; Google etc. send X-Frame-Options/CSP frame-ancestors
-    // and will always refuse (blank page / 401 / "invalid page"). The User-Agent is NOT the cause.
     function canFrame(url) {
       try { return new URL(url, location.href).origin === location.origin; } catch (e) { return false; }
     }
@@ -1190,7 +1200,6 @@
       } catch (e) { return null; }
     }
 
-    // Real popup window (OAuth works in popups, not in iframes). Must be called from a user gesture.
     function openPopup(url) {
       const w = 520, h = 720;
       const left = Math.max(0, Math.round((window.screenX || 0) + (window.outerWidth - w) / 2));
@@ -1198,10 +1207,7 @@
       let win = null;
       const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
       if (touch) {
-        // Phones / APK WebView have no floating windows and window.open() is unreliable there.
-        // A real <a target=_blank> click is routed by the wrapper (e.g. "open external links in external
-        // browser") and leaves this page — and the terminal — untouched.
-        if (navigator.userActivation && !navigator.userActivation.isActive) return null; // no gesture: show fallback card
+        if (navigator.userActivation && !navigator.userActivation.isActive) return null;
         return openNewTab(url);
       }
       try {
@@ -1274,7 +1280,6 @@
       });
     }
 
-    // Intercept window.open
     window.open = function(url, target, features) {
       if (url && typeof url === 'string' && /^https?:\/\//i.test(url)) {
         openExtModal(url);
@@ -1283,7 +1288,6 @@
       return _origWindowOpen.apply(window, arguments);
     };
 
-    // Intercept all external link clicks on page
     document.addEventListener('click', function(e) {
       const a = e.target.closest('a');
       if (!a) return;
@@ -1307,10 +1311,7 @@
         .replace(/\r/g, '')
         .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
     }
-    // ---- Auth-link chip: one tap opens / copies the login URL the CLI printed ----
-    // The URL is rebuilt from xterm's screen buffer (what the user actually sees), NOT from the raw
-    // output stream: TUIs redraw the same URL many times, and stripping escapes glued those copies
-    // together ("...client_id=X...https://...client_id=X" -> Google: "parameters can only have a single value").
+
     let termLinkUrl = '', termLinkDismissed = '', termLinkTimer = null;
     function termScreenLines() {
       if (typeof term === 'undefined' || !term || !term.buffer || !term.buffer.active) return null;
@@ -1318,7 +1319,7 @@
       const cols = term.cols || 80;
       const start = Math.max(0, buf.length - 300);
       const lines = [];
-      const lastRow = [];   // length of the last physical row of each logical line
+      const lastRow = [];
       for (let i = start; i < buf.length; i++) {
         const line = buf.getLine(i);
         if (!line) continue;
@@ -1326,7 +1327,6 @@
         if (line.isWrapped && lines.length) { lines[lines.length - 1] += t; lastRow[lastRow.length - 1] = t.length; }
         else { lines.push(t); lastRow.push(t.length); }
       }
-      // strip TUI side borders, then glue app-wrapped URLs (row filled to the edge + next row is one bare token)
       const clean = lines.map(l => l.replace(/^\s*[│┃|]\s?/, '').replace(/\s?[│┃|]\s*$/, ''));
       const out = [];
       for (let i = 0; i < clean.length; i++) {
@@ -1343,7 +1343,6 @@
       return out;
     }
     function pickAuthUrl(text) {
-      // each match stops at whitespace OR at the start of the next URL
       const re = /https?:\/\/(?:(?!https?:\/\/)[\x21\x23-\x26\x28-\x3b\x3d\x3f-\x7e])+/g;
       let m, found = '';
       while ((m = re.exec(text))) {
@@ -1454,14 +1453,12 @@
     async function apiFetch(path, opts) {
       opts = opts || {};
       opts.headers = apiHeaders(opts.headers || {});
-      // While any API call is in flight, watch for a CLI command that is blocked on a Google auth code.
       const watch = !String(path).startsWith('/api/auth/pending');
       if (watch) authWatchStart();
       try { return await fetch(apiUrl(path), opts); }
       finally { if (watch) authWatchStop(); }
     }
 
-    // ---- Google auth prompt coming from the CLI ("Enter the authorization code:") ----
     let authWatchCount = 0, authWatchTimer = null, authPolling = false;
     let authPendingId = null, authLastSubmittedId = null, authBannerShown = false, authDismissedId = null;
     function authWatchStart() {
@@ -1493,7 +1490,6 @@
       if (u) copyText(u, 'Link copied.');
     }
     function dismissAuthBanner() {
-      // hide until the CLI asks for a NEW code (different pending id)
       authDismissedId = authPendingId;
       authBannerShown = false;
       document.getElementById('authBanner').style.display = 'none';
@@ -1634,7 +1630,9 @@
         ev.target.classList.add('active');
       }
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      document.getElementById('tab-' + name).classList.add('active');
+      const activeEl = document.getElementById('tab-' + name);
+      if (activeEl) activeEl.classList.add('active');
+
       if (name === 'sessions') loadSessions();
       if (name === 'hardware') fetchHardwareStats();
       if (name === 'files') fmList();
@@ -1660,10 +1658,18 @@
 
     function initXterm() {
       if (term) return;
+      let curSize = 13;
+      let curFont = 'mono';
+      try {
+        const saved = JSON.parse(localStorage.getItem('colab_ui_settings') || '{}');
+        if (saved.fontSize) curSize = Number(saved.fontSize) || 13;
+        if (saved.font) curFont = saved.font;
+      } catch (_) {}
+
       term = new Terminal({
         cursorBlink: true,
-        fontSize: 13,
-        fontFamily: 'SFMono-Regular, Consolas, Menlo, monospace',
+        fontSize: curSize,
+        fontFamily: FONT_FAMILIES[curFont] || FONT_FAMILIES.mono,
         theme: {
           background: '#050608',
           foreground: '#d1d5db',
@@ -1672,7 +1678,6 @@
           selectionForeground: '#ffffff'
         },
         allowProposedApi: true,
-        // OSC-8 hyperlinks: without this xterm shows a confirm() banner and calls window.open() itself
         linkHandler: {
           allowNonHttpProtocols: false,
           activate: (ev, uri) => { if (/^https?:\/\//i.test(uri)) openExtModal(uri); }
@@ -1682,7 +1687,6 @@
       });
       fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
-      // Plain-text URLs printed by the CLI (e.g. agy / antigravity login link) become clickable
       try {
         if (window.WebLinksAddon) {
           term.loadAddon(new WebLinksAddon.WebLinksAddon((ev, uri) => openExtModal(uri)));
@@ -1691,7 +1695,6 @@
       term.open(document.getElementById('xtermBox'));
       fitAddon.fit();
 
-      // Copy selection: Ctrl/Cmd+C when there is a selection
       term.attachCustomKeyEventHandler((ev) => {
         if (ev.type !== 'keydown') return true;
         const mod = ev.ctrlKey || ev.metaKey;
@@ -1733,7 +1736,7 @@
           resizeTimer = null;
           if (termMode !== 'pty' || !fitAddon) return;
           const box = document.getElementById('xtermBox');
-          if (!box || box.offsetWidth === 0 || box.offsetHeight === 0) return; // hidden tab
+          if (!box || box.offsetWidth === 0 || box.offsetHeight === 0) return;
           try { fitAddon.fit(); sendResize(); } catch (e) {}
         }, 100);
       };
@@ -1758,7 +1761,6 @@
     function sendPtyEnter() {
       if (termMode === 'pty' && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'stdin', data: '\r' }));
-        // also send newline variants some CLIs expect
         setTimeout(() => {
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'stdin', data: '\n' }));
@@ -1770,7 +1772,6 @@
       }
     }
 
-    // ---- Virtual Keypad Logic (ARROWS / MODIFIERS) ----
     function toggleArrowsPanel(force) {
       const pad = document.getElementById('arrowsFloatingPad');
       const btn = document.getElementById('btnArrowsToggle');
@@ -1848,28 +1849,24 @@
           else if (isAlt) seq = '\x1b[1;3A';
           else seq = '\x1b[A';
           break;
-
         case 'down':
           if (isCtrl && isAlt) seq = '\x1b[1;7B';
           else if (isCtrl) seq = '\x1b[1;5B';
           else if (isAlt) seq = '\x1b[1;3B';
           else seq = '\x1b[B';
           break;
-
         case 'right':
           if (isCtrl && isAlt) seq = '\x1b[1;7C';
           else if (isCtrl) seq = '\x1b[1;5C';
           else if (isAlt) seq = '\x1b[1;3C';
           else seq = '\x1b[C';
           break;
-
         case 'left':
           if (isCtrl && isAlt) seq = '\x1b[1;7D';
           else if (isCtrl) seq = '\x1b[1;5D';
           else if (isAlt) seq = '\x1b[1;3D';
           else seq = '\x1b[D';
           break;
-
         case 'enter':
           if (isAlt && isCtrl) {
             seq = '\x1b\n';
@@ -1882,19 +1879,16 @@
             return;
           }
           break;
-
         case 'esc':
           if (isAlt) seq = '\x1b\x1b';
           else seq = '\x1b';
           break;
-
         case 'f10':
           if (isCtrl && isAlt) seq = '\x1b[21;7~';
           else if (isCtrl) seq = '\x1b[21;5~';
           else if (isAlt) seq = '\x1b[21;3~';
           else seq = '\x1b[21~';
           break;
-
         default:
           return;
       }
@@ -1910,7 +1904,6 @@
       const handle = document.getElementById('arrowsPadHeader');
       if (!pad || !handle) return;
 
-      // keys must not steal focus from the terminal, and must not stay highlighted after a tap
       pad.addEventListener('mousedown', (e) => { if (e.target.closest('.pad-key')) e.preventDefault(); });
       const release = (e) => {
         const key = e.target.closest && e.target.closest('.pad-key');
@@ -1978,7 +1971,6 @@
       } catch (_) {}
     }
 
-    // ---- Command & Script Templates Logic ----
     const DEFAULT_COMMAND_TEMPLATES = [
       { id: 'tpl_gpu', name: 'GPU Status', command: 'nvidia-smi' },
       { id: 'tpl_disk', name: 'Disk Space', command: 'df -h' },
@@ -2080,7 +2072,6 @@
       if (!code) return;
       try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
 
-      // Ensure terminal tab is active
       const tabTerm = document.getElementById('tab-terminal');
       if (tabTerm && !tabTerm.classList.contains('active')) {
         const termNavBtn = document.querySelector('nav .tab-btn:first-child');
@@ -2089,16 +2080,13 @@
 
       if (termMode === 'pty') {
         if (ws && ws.readyState === WebSocket.OPEN) {
-          // Normalize newlines for PTY input: in terminal PTY, carriage returns trigger newline execution
           const ptyData = code.replace(/\r\n/g, '\r').replace(/\n/g, '\r') + '\r';
           ws.send(JSON.stringify({ type: 'stdin', data: ptyData }));
           setStatus((label ? label.toUpperCase() : 'COMMAND') + ' SENT', 'var(--text)');
-          // no term.focus(): focusing xterm's hidden textarea pops up the on-screen keyboard
         } else {
           setStatus('PTY OFFLINE', 'var(--amber)');
         }
       } else {
-        // Line-exec mode: preserves newlines so server can run %%bash multiline block
         const cleanCmd = code.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         const logs = document.getElementById('terminalLogs');
         if (logs) {
@@ -2163,14 +2151,8 @@
       const id = document.getElementById('cmdTemplateId').value.trim();
       const name = document.getElementById('cmdTemplateName').value.trim();
       const code = document.getElementById('cmdTemplateCode').value;
-      if (!name) {
-        alert('Please enter a template name');
-        return;
-      }
-      if (!code.trim()) {
-        alert('Please enter a command or script');
-        return;
-      }
+      if (!name) { alert('Please enter a template name'); return; }
+      if (!code.trim()) { alert('Please enter a command or script'); return; }
 
       if (id) {
         const item = commandTemplates.find(t => t.id === id);
@@ -2199,10 +2181,7 @@
     function executeFromModal() {
       const name = document.getElementById('cmdTemplateName').value.trim() || 'Command';
       const code = document.getElementById('cmdTemplateCode').value;
-      if (!code.trim()) {
-        alert('Command/script is empty');
-        return;
-      }
+      if (!code.trim()) { alert('Command/script is empty'); return; }
       closeCommandModal();
       runTemplateCode(code, name);
     }
@@ -2359,7 +2338,6 @@
         if (termMode === 'pty') {
           xtermBox.classList.add('hidden');
           pan.style.display = 'block';
-          // prefer live transcript; fallback serialize from xterm buffer
           let text = stripAnsi(termTranscript);
           if (!text && term) {
             try {
@@ -2377,7 +2355,6 @@
           }
           pan.textContent = text || '(empty)';
         } else {
-          // line-exec: logs already selectable; still show panel with cleaned text
           xtermBox.classList.add('hidden');
           if (lineBox) lineBox.style.display = 'none';
           pan.style.display = 'block';
@@ -2417,36 +2394,6 @@
         });
     }
 
-    function copyTermSelection() {
-      if (selectMode) {
-        const sel = window.getSelection && window.getSelection().toString();
-        if (sel) {
-          navigator.clipboard.writeText(sel).then(() => setStatus('COPIED', 'var(--text)'))
-            .catch(() => setStatus('COPY FAIL', 'var(--red)'));
-          return;
-        }
-        copySelectModeAll();
-        return;
-      }
-      if (!term) return;
-      const sel = term.getSelection();
-      if (!sel) {
-        setStatus('NO SELECTION — try [SELECT_TEXT]', 'var(--amber)');
-        return;
-      }
-      navigator.clipboard.writeText(sel).then(() => {
-        setStatus('COPIED', 'var(--text)');
-      }).catch(() => {
-        const ta = document.createElement('textarea');
-        ta.value = sel;
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); setStatus('COPIED', 'var(--text)'); }
-        catch (e) { setStatus('COPY FAIL', 'var(--red)'); }
-        document.body.removeChild(ta);
-      });
-    }
-
     function sendResize() {
       if (!term || !ws || ws.readyState !== WebSocket.OPEN || termMode !== 'pty') return;
       ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
@@ -2474,7 +2421,7 @@
     }
     function scheduleReconnect() {
       if (wsRetryTimer) clearTimeout(wsRetryTimer);
-      const delay = Math.min(30000, 2000 * Math.pow(2, reconnectAttempts++)); // 2s, 4s, 8s … 30s
+      const delay = Math.min(30000, 2000 * Math.pow(2, reconnectAttempts++));
       wsRetryTimer = setTimeout(() => {
         wsRetryTimer = null;
         if (termMode === 'pty' && !document.hidden && !ptyNoRetry) connectPty();
@@ -2519,21 +2466,19 @@
           appendTranscript(ev.data);
           return;
         }
-        if (msg.type === 'ping' || msg.type === 'pong') return; // keepalive — do not print
+        if (msg.type === 'ping' || msg.type === 'pong') return;
         if (msg.type === 'stdout') {
           const d = msg.data || '';
           term.write(d);
-          appendTranscript(d); // raw; ANSI is stripped lazily only when SELECT_TEXT is opened
+          appendTranscript(d);
         } else if (msg.type === 'ready') {
           reconnectAttempts = 0;
           if (msg.data && msg.data.attached) {
-            // server kept the shell alive: wipe the local screen, the server now replays the live one
             try { term.reset(); } catch (e) {}
             termTranscript = '';
             sendResize();
             return;
           }
-          // optional: run the new shell inside tmux (not needed for reattach, kept as extra safety)
           if (localStorage.getItem('colab_tmux') === '1' && ws === sock && sock.readyState === WebSocket.OPEN) {
             setTimeout(() => {
               if (ws === sock && sock.readyState === WebSocket.OPEN) {
@@ -2546,12 +2491,12 @@
           appendTranscript('[ssh ready]\n');
           sendResize();
         } else if (msg.type === 'error') {
-          ptyNoRetry = true; // config/limit errors will not fix themselves — use [RECONNECT]
+          ptyNoRetry = true;
           term.writeln('\x1b[31m[error] ' + (msg.data || '') + '\x1b[0m');
           appendTranscript('[error] ' + (msg.data || '') + '\n');
           setStatus('ERROR', 'var(--red)');
         } else if (msg.type === 'exit') {
-          ptyNoRetry = true; // shell ended on purpose — do not respawn it
+          ptyNoRetry = true;
           term.writeln('\r\n\x1b[90m[exit ' + msg.exitCode + '] press [RECONNECT] to open a new shell\x1b[0m');
           appendTranscript('\n[exit ' + msg.exitCode + ']\n');
           setStatus('EXITED', 'var(--amber)');
@@ -2561,7 +2506,7 @@
         if (ws !== sock) return;
         if (window._ptyPingTimer) { clearInterval(window._ptyPingTimer); window._ptyPingTimer = null; }
         if (ev && ev.code === 4000) { ptyNoRetry = true; setStatus('OPENED ELSEWHERE — [RECONNECT]', 'var(--amber)'); return; }
-        if (ptyNoRetry) return; // keep EXITED / ERROR status
+        if (ptyNoRetry) return;
         setStatus('DISCONNECTED', 'var(--red)');
         scheduleReconnect();
       };
@@ -2743,7 +2688,6 @@
       loadSessions();
     }
 
-
     async function closeAllSessions() {
       if (!confirm('Stop ALL Colab sessions on this account?')) return;
       const log = document.getElementById('sessionCreateLog');
@@ -2797,11 +2741,9 @@
           renderMountLog(log, { jobId: id, hint: 'Restored job after return from browser. If you already Allowed — press CONFIRM now.', output: d.output }, urls);
         }
       } catch (e) {
-        /* keep id, allow confirm attempt */
         if (btn2) btn2.disabled = false;
       }
     }
-
 
     async function mountDriveStart() {
       const log = document.getElementById('nbActionLog');
@@ -2831,7 +2773,6 @@
         }
         saveDriveJob(d.jobId);
         let urls = filterAuthUrls(d.authUrls || []);
-        // Poll status a few times if URL not ready
         if (!urls.length && d.jobId) {
           for (let i = 0; i < 15 && !urls.length; i++) {
             await new Promise(r => setTimeout(r, 2000));
@@ -2876,7 +2817,7 @@
         lab.textContent = 'Open the FULL link (accounts.google.com), Allow, then CONFIRM:';
         lab.style.marginBottom = '8px';
         log.appendChild(lab);
-        urls.forEach((u, idx) => {
+        urls.forEach((u) => {
           const row = document.createElement('div');
           row.style.cssText = 'margin-bottom:10px;word-break:break-all;';
           const a = document.createElement('a');
@@ -2925,8 +2866,7 @@
       }
     }
 
-    async function mountDriveConfirm
-() {
+    async function mountDriveConfirm() {
       const log = document.getElementById('nbActionLog');
       const btn2 = document.getElementById('btnMountConfirm');
       if (!driveMountJobId) {
@@ -2960,8 +2900,7 @@
       }
     }
 
-    async function scanNotebooks
-() {
+    async function scanNotebooks() {
       const log = document.getElementById('nbActionLog');
       const list = document.getElementById('nbList');
       const root = document.getElementById('nbRootPath').value.trim() || '/content/drive/MyDrive/Colab Notebooks';
@@ -3082,7 +3021,6 @@
       }
     }
 
-
     async function fetchHardwareStats() {
       const tiles = document.getElementById('hwTiles');
       const details = document.getElementById('hwDetails');
@@ -3143,7 +3081,6 @@
         }
         log.className = 'log-box ok';
         log.textContent = 'Path: ' + (d.path || fmPath) + ' · ' + (d.entries || []).length + ' items';
-        // parent row
         if (fmPath !== '/' && fmPath !== '') {
           const tr = document.createElement('tr');
           tr.innerHTML = '<td class="name dir" onclick="fmNavigate(\'' + escAttr(parentPath(fmPath)) + '\')">.. /</td><td></td><td></td>';
@@ -3157,8 +3094,7 @@
             : '<span class="name">' + esc(ent.name) + '</span>';
           let actions = '';
           if (!isDir) {
-            actions =
-              '<button class="btn" type="button" onclick="fmDownload(\'' + escAttr(ent.path) + '\')">[DL]</button> ';
+            actions = '<button class="btn" type="button" onclick="fmDownload(\'' + escAttr(ent.path) + '\')">[DL]</button> ';
           }
           actions += isDir
             ? '<button class="btn" type="button" onclick="fmNavigate(\'' + escAttr(ent.path) + '\')">[OPEN]</button>'
@@ -3237,7 +3173,6 @@
         fd.append('path', fmPath);
         fd.append('session', activeSession);
         const r = await apiFetch('/api/files/upload', { method: 'POST', body: fd });
-        // don't set Content-Type — browser sets multipart boundary
         const d = await r.json();
         log.className = 'log-box ' + (d.success ? 'ok' : 'err');
         log.textContent = (d.success ? 'UPLOADED ' + d.remotePath : 'FAIL') + '\n' + (d.output || '');
@@ -3256,7 +3191,6 @@
       return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
-    // for inline handlers: onclick="fn('<here>')". File names come from the remote VM, so treat them as hostile.
     function escAttr(s) {
       return escHtmlAttr(
         String(s == null ? '' : s)
@@ -3270,7 +3204,6 @@
       return (n / 1048576).toFixed(1) + ' MB';
     }
 
-    // ---- SSH key (colab ssh) ----
     let lastSshPub = '';
     function renderSshKey(d) {
       const box = document.getElementById('sshKeyInfo');
@@ -3337,7 +3270,6 @@
       });
     }
 
-    // ---- Clock + battery in the header ----
     function initSysBadge() {
       const clock = document.getElementById('sysClock');
       const bat = document.getElementById('sysBattery');
@@ -3351,7 +3283,7 @@
       setInterval(tick, 1000);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
 
-      if (!bat || typeof navigator.getBattery !== 'function') return;   // not supported (e.g. iOS / insecure origin)
+      if (!bat || typeof navigator.getBattery !== 'function') return;
       navigator.getBattery().then((b) => {
         const draw = () => {
           const pct = Math.round((b.level || 0) * 100);
@@ -3367,7 +3299,86 @@
       }).catch(() => {});
     }
 
+    function initUiSettings() {
+      const root = document.documentElement;
+      const fontSelect = document.getElementById('uiFontFamily');
+      const fontSize = document.getElementById('uiFontSize');
+      const fontSizeValue = document.getElementById('uiFontSizeValue');
+      const buttonScale = document.getElementById('uiButtonScale');
+      const buttonScaleValue = document.getElementById('uiButtonScaleValue');
+      const defaults = { font: 'mono', fontSize: '13', buttonScale: '1' };
+
+      function applySettings(settings) {
+        const font = FONT_FAMILIES[settings.font] ? settings.font : defaults.font;
+        const size = Math.min(18, Math.max(8, Number(settings.fontSize) || 13));
+        const scale = Math.min(1.5, Math.max(0.4, Number(settings.buttonScale) || 1));
+
+        if (fontSelect) fontSelect.value = font;
+        if (fontSize) fontSize.value = String(size);
+        if (buttonScale) buttonScale.value = String(scale);
+
+        root.style.setProperty('--ui-font-family', FONT_FAMILIES[font]);
+        root.style.setProperty('--ui-font-size', size + 'px');
+        root.style.setProperty('--ui-button-scale', String(scale));
+
+        if (fontSizeValue) fontSizeValue.textContent = String(size);
+        if (buttonScaleValue) buttonScaleValue.textContent = Math.round(scale * 100);
+
+        // Обновляем шрифт и размер напрямую в движке xterm.js
+        if (term) {
+          try {
+            term.options.fontSize = size;
+            term.options.fontFamily = FONT_FAMILIES[font];
+            if (fitAddon) {
+              fitAddon.fit();
+              sendResize();
+            }
+          } catch (e) {
+            console.warn('Ошибка применения шрифта к xterm:', e);
+          }
+        }
+      }
+
+      let savedSettings = {};
+      try {
+        savedSettings = JSON.parse(localStorage.getItem('colab_ui_settings') || '{}');
+      } catch (error) {
+        savedSettings = {};
+      }
+      applySettings({ ...defaults, ...savedSettings });
+
+      function saveSettings() {
+        const settings = {
+          font: fontSelect ? fontSelect.value : defaults.font,
+          fontSize: fontSize ? fontSize.value : defaults.fontSize,
+          buttonScale: buttonScale ? buttonScale.value : defaults.buttonScale
+        };
+        applySettings(settings);
+        try {
+          localStorage.setItem('colab_ui_settings', JSON.stringify(settings));
+        } catch (error) {
+          console.warn('Не удалось сохранить настройки интерфейса:', error);
+        }
+      }
+
+      if (fontSelect) fontSelect.addEventListener('change', saveSettings);
+      if (fontSize) fontSize.addEventListener('input', saveSettings);
+      if (buttonScale) buttonScale.addEventListener('input', saveSettings);
+      const resetBtn = document.getElementById('uiSettingsReset');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          applySettings(defaults);
+          try {
+            localStorage.removeItem('colab_ui_settings');
+          } catch (error) {
+            console.warn('Не удалось сбросить настройки интерфейса:', error);
+          }
+        });
+      }
+    }
+
     // init
+    initUiSettings();
     initSysBadge();
     initExtModal();
     initArrowsPadDrag();
