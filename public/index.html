@@ -199,12 +199,41 @@
     .auth-banner .link-row input { flex: 1; min-width: 0; color: var(--cyan); }
     a.btn { text-decoration: none; display: inline-block; }
 
+    /* Terminal Connect Dropdown */
+    .connect-dropdown {
+      position: relative;
+      display: inline-flex;
+    }
+    .connect-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 1000;
+      background: rgba(13, 18, 29, 0.98);
+      border: 1px solid var(--cyan);
+      border-radius: 4px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 12px rgba(0, 240, 255, 0.3);
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 140px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .connect-dropdown-menu .dropdown-btn {
+      width: 100%;
+      text-align: left;
+      white-space: nowrap;
+    }
+
     /* Floating Virtual Arrows Keypad */
     .arrows-pad {
       position: fixed;
       bottom: 24px;
       right: 24px;
-      width: 204px;
+      width: auto;
+      max-width: calc(100vw - 12px);
       background: rgba(13, 18, 29, 0.96);
       border: 1px solid rgba(0, 240, 255, 0.45);
       border-radius: 6px;
@@ -255,12 +284,20 @@
       background: rgba(255, 51, 102, 0.25);
       border-color: var(--red);
     }
+    .arrows-pad-body {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      background: #06080d;
+    }
     .arrows-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
       padding: 8px;
       background: #06080d;
+      width: 196px;
+      flex-shrink: 0;
     }
     .pad-key {
       background: var(--card-bg);
@@ -336,13 +373,130 @@
     @media (hover: hover) and (pointer: fine) {
       .pad-key.key-esc:hover { border-color: var(--red); background: rgba(255, 51, 102, 0.18); color: #fff; }
     }
-    .pad-key.key-f10 {
+    .pad-key.key-f10,
+    .pad-key.key-fn {
       color: var(--amber);
       font-size: 12px;
       border-color: rgba(255, 176, 0, 0.35);
     }
     @media (hover: hover) and (pointer: fine) {
-      .pad-key.key-f10:hover { border-color: var(--amber); background: rgba(255, 176, 0, 0.18); color: #fff; }
+      .pad-key.key-f10:hover,
+      .pad-key.key-fn:hover { border-color: var(--amber); background: rgba(255, 176, 0, 0.18); color: #fff; }
+    }
+    .pad-key.key-fn.active-latched {
+      background: rgba(255, 176, 0, 0.24) !important;
+      border-color: var(--amber) !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 12px rgba(255, 176, 0, 0.55), inset 0 0 8px rgba(255, 176, 0, 0.3) !important;
+      text-shadow: 0 0 6px var(--amber) !important;
+    }
+    .pad-key.key-fn.active-latched .key-mod-led {
+      background: var(--amber) !important;
+      box-shadow: 0 0 8px var(--amber) !important;
+    }
+    .arrows-fn-side {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(42px, 1fr));
+      grid-template-rows: repeat(4, 1fr);
+      gap: 5px;
+      padding: 8px 6px 8px 8px;
+      border-right: 1px dashed rgba(0, 240, 255, 0.25);
+      background: #06080d;
+    }
+    .pad-key.key-ext-fn {
+      color: var(--amber);
+      font-size: 11px;
+      border-color: rgba(255, 176, 0, 0.35);
+      height: 32px;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .pad-key.key-ext-fn:hover {
+        border-color: var(--amber);
+        background: rgba(255, 176, 0, 0.18);
+        color: #fff;
+      }
+    }
+    .pad-key.key-ext-nav {
+      color: var(--cyan);
+      font-size: 10.5px;
+      border-color: rgba(0, 240, 255, 0.35);
+      height: 32px;
+      position: relative;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .pad-key.key-ext-nav:hover {
+        border-color: var(--cyan);
+        background: rgba(0, 240, 255, 0.18);
+        color: #fff;
+      }
+    }
+    .pad-key.key-ext-action {
+      font-size: 10px;
+      height: 32px;
+    }
+    .pad-key.key-ext-copy,
+    .pad-key.key-ext-paste {
+      color: var(--text);
+      border-color: rgba(0, 255, 102, 0.35);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .pad-key.key-ext-copy:hover,
+      .pad-key.key-ext-paste:hover {
+        border-color: var(--text);
+        background: rgba(0, 255, 102, 0.18);
+        color: #fff;
+      }
+    }
+    .pad-key.key-ext-clear {
+      color: var(--amber);
+      border-color: rgba(255, 176, 0, 0.35);
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .pad-key.key-ext-clear:hover {
+        border-color: var(--amber);
+        background: rgba(255, 176, 0, 0.18);
+        color: #fff;
+      }
+    }
+    .pad-key.key-ext-danger {
+      color: #ff8aa8;
+      border-color: rgba(255, 51, 102, 0.4);
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      height: 32px;
+    }
+    .pad-key.key-ext-delall {
+      grid-column: span 2;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .pad-key.key-ext-danger:hover {
+        border-color: var(--red);
+        background: rgba(255, 51, 102, 0.22);
+        color: #fff;
+      }
+    }
+    @media (max-width: 520px) {
+      .arrows-fn-side {
+        grid-template-columns: repeat(5, minmax(32px, 1fr));
+        gap: 4px;
+        padding: 6px 4px 6px 6px;
+      }
+      .arrows-grid {
+        width: 156px;
+        gap: 4px;
+        padding: 6px;
+      }
+      .pad-key {
+        font-size: 11px;
+        height: 38px;
+      }
+      .pad-key.key-ext-fn,
+      .pad-key.key-ext-nav,
+      .pad-key.key-ext-action,
+      .pad-key.key-ext-danger {
+        height: 28px;
+        font-size: 9px;
+      }
     }
     .pad-key.key-mod {
       font-size: 11px;
@@ -829,13 +983,19 @@
       <div class="term-toolbar">
         <button class="btn active-mode" id="btnModePty" type="button" onclick="setTermMode('pty')">[SSH/SHELL]</button>
         <button class="btn" id="btnModeExec" type="button" onclick="setTermMode('exec')">[LINE-EXEC]</button>
-        <button class="btn btn-cyan" type="button" onclick="reconnectTerm()">[RECONNECT]</button>
-        <button class="btn btn-danger" type="button" onclick="disconnectTerm()">[DISCONNECT]</button>
-        <button class="btn btn-danger" type="button" onclick="killShell()" title="Kill the running shell on the server (a new one starts on RECONNECT)">[KILL_SHELL]</button>
+        <div class="connect-dropdown" id="connectDropdown">
+          <button class="btn btn-cyan dropdown-toggle" id="btnConnectMenu" type="button" onclick="toggleConnectMenu(event)" title="Connection actions: Reconnect, Disconnect, Kill shell">
+            [CONNECT ▾]
+          </button>
+          <div class="connect-dropdown-menu" id="connectDropdownMenu" style="display:none;">
+            <button class="btn btn-cyan dropdown-btn" type="button" onclick="reconnectTerm(); closeConnectMenu();">[RECONNECT]</button>
+            <button class="btn btn-danger dropdown-btn" type="button" onclick="disconnectTerm(); closeConnectMenu();">[DISCONNECT]</button>
+            <button class="btn btn-danger dropdown-btn" type="button" onclick="killShell(); closeConnectMenu();" title="Kill the running shell on the server (a new one starts on RECONNECT)">[KILL_SHELL]</button>
+          </div>
+        </div>
         <button class="btn btn-cyan" id="btnArrowsToggle" type="button" onclick="toggleArrowsPanel()" title="Toggle Virtual Arrow & Function Keypad">[KEYPAD]</button>
         <button class="btn btn-cyan" id="btnCommandsToggle" type="button" onclick="toggleCommandsPanel()" title="Toggle Command & Script Templates">[COMMANDS]</button>
         <button class="btn btn-cyan" type="button" onclick="toggleSelectMode()">[SELECT_TEXT]</button>
-        <label class="hint" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Optional: run NEW shells inside tmux (the server already keeps shells alive between reconnects)"><input type="checkbox" id="chkTmux" onchange="localStorage.setItem('colab_tmux', this.checked ? '1' : '0')"> tmux</label>
       </div>
       <div id="selectModeBar" style="display:none;flex-shrink:0;gap:8px;align-items:center;flex-wrap:wrap;">
         <span class="hint" style="color:var(--cyan);">SELECT MODE — drag handles work on text below. [COPY_ALL] or long-press.</span>
@@ -844,7 +1004,7 @@
       </div>
       <div class="terminal-container">
         <div class="terminal-header">
-          <span id="termHeaderTitle">SSH // colab ssh (xterm.js)</span>
+          <span id="termHeaderTitle">SSH</span>
           <span id="termStatus">OFFLINE</span>
         </div>
         <div id="termLinkChip" style="display:none;flex-direction:column;gap:6px;padding:6px 10px;background:rgba(255,176,0,0.10);border-bottom:1px solid var(--amber);font-size:11px;">
@@ -1041,34 +1201,74 @@
     <div class="arrows-pad-header" id="arrowsPadHeader" title="Drag to move keypad">
       <div class="arrows-pad-title">
         <span class="drag-icon">⋮⋮</span>
-        <span>KEYPAD</span>
+        <span id="arrowsPadTitleText">KEYPAD</span>
       </div>
       <button class="arrows-pad-close" type="button" onclick="toggleArrowsPanel(false)" title="Close keypad">✕</button>
     </div>
-    <div class="arrows-grid">
-      <!-- Row 1: ESC, ↑, CTRL -->
-      <button type="button" class="pad-key key-esc" onclick="pressPadKey('esc')" title="Escape (ESC)">ESC</button>
-      <button type="button" class="pad-key key-arrow" onclick="pressPadKey('up')" title="Up Arrow (↑)">↑</button>
-      <button type="button" class="pad-key key-mod" id="padKeyCtrl" onclick="toggleModifier('ctrl')" title="Toggle CTRL (Latch/Release)">
-        <span>CTRL</span>
-        <span class="key-mod-led" id="ledCtrl"></span>
-      </button>
 
-      <!-- Row 2: ←, ○ (ENTER), → -->
-      <button type="button" class="pad-key key-arrow" onclick="pressPadKey('left')" title="Left Arrow (←)">←</button>
-      <button type="button" class="pad-key key-enter" onclick="pressPadKey('enter')" title="Enter (○ / ↵)">
-        <span class="key-sym-circle">○</span>
-        <span class="key-subtext">ENTER</span>
-      </button>
-      <button type="button" class="pad-key key-arrow" onclick="pressPadKey('right')" title="Right Arrow (→)">→</button>
+    <div class="arrows-pad-body" id="arrowsPadBody">
+      <!-- Left expandable wing: F1-F10 + Tab + Shift + BS + PgUp + PgDn + Copy + Paste + Clear + DelAll -->
+      <div id="arrowsFnSidePanel" class="arrows-fn-side" style="display:none;" aria-label="Extended function keypad">
+        <!-- Row 1: F1, F2, F3, F4, F5 -->
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f1')" title="F1">F1</button>
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f2')" title="F2">F2</button>
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f3')" title="F3">F3</button>
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f4')" title="F4">F4</button>
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f5')" title="F5">F5</button>
 
-      <!-- Row 3: F10, ↓, ALT -->
-      <button type="button" class="pad-key key-f10" onclick="pressPadKey('f10')" title="F10 Function Key">F10</button>
-      <button type="button" class="pad-key key-arrow" onclick="pressPadKey('down')" title="Down Arrow (↓)">↓</button>
-      <button type="button" class="pad-key key-mod" id="padKeyAlt" onclick="toggleModifier('alt')" title="Toggle ALT (Latch/Release)">
-        <span>ALT</span>
-        <span class="key-mod-led" id="ledAlt"></span>
-      </button>
+        <!-- Row 2: F6, F7, F8, F9, F10 -->
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f6')" title="F6">F6</button>
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f7')" title="F7">F7</button>
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f8')" title="F8">F8</button>
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f9')" title="F9">F9</button>
+        <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f10')" title="F10">F10</button>
+
+        <!-- Row 3: TAB, SHIFT, ⌫, PG UP, PG DN -->
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('tab')" title="Tab (⇥)">TAB</button>
+        <button type="button" class="pad-key key-ext-nav key-mod" id="padKeyShift" onclick="toggleModifier('shift')" title="Toggle SHIFT (Latch/Release)">
+          <span>SHIFT</span>
+          <span class="key-mod-led" id="ledShift"></span>
+        </button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('backspace')" title="Backspace (Delete previous character)">⌫ BS</button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('pgup')" title="Page Up (⇞)">PG UP</button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('pgdown')" title="Page Down (⇟)">PG DN</button>
+
+        <!-- Row 4: COPY, PASTE, CLEAR, DEL ALL (spans 2 cols) -->
+        <button type="button" class="pad-key key-ext-action key-ext-copy" onclick="pressPadKey('copy')" title="Copy selection to clipboard">COPY</button>
+        <button type="button" class="pad-key key-ext-action key-ext-paste" onclick="pressPadKey('paste')" title="Paste clipboard to terminal">PASTE</button>
+        <button type="button" class="pad-key key-ext-action key-ext-clear" onclick="pressPadKey('clear')" title="Clear terminal screen (Ctrl+L)">CLEAR</button>
+        <button type="button" class="pad-key key-ext-danger key-ext-delall" onclick="pressPadKey('delall')" title="Delete entire line (Ctrl+A, Ctrl+K)">DEL ALL</button>
+      </div>
+
+      <!-- Right main arrows grid -->
+      <div class="arrows-grid" id="arrowsMainGrid">
+        <!-- Row 1: ESC, ↑, CTRL -->
+        <button type="button" class="pad-key key-esc" onclick="pressPadKey('esc')" title="Escape (ESC)">ESC</button>
+        <button type="button" class="pad-key key-arrow" onclick="pressPadKey('up')" title="Up Arrow (↑)">↑</button>
+        <button type="button" class="pad-key key-mod" id="padKeyCtrl" onclick="toggleModifier('ctrl')" title="Toggle CTRL (Latch/Release)">
+          <span>CTRL</span>
+          <span class="key-mod-led" id="ledCtrl"></span>
+        </button>
+
+        <!-- Row 2: ←, ○ (ENTER), → -->
+        <button type="button" class="pad-key key-arrow" onclick="pressPadKey('left')" title="Left Arrow (←)">←</button>
+        <button type="button" class="pad-key key-enter" onclick="pressPadKey('enter')" title="Enter (○ / ↵)">
+          <span class="key-sym-circle">○</span>
+          <span class="key-subtext">ENTER</span>
+        </button>
+        <button type="button" class="pad-key key-arrow" onclick="pressPadKey('right')" title="Right Arrow (→)">→</button>
+
+        <!-- Row 3: Fn, ↓, ALT -->
+        <button type="button" class="pad-key key-fn key-mod" id="padKeyFn" onclick="pressPadKey('fn')" title="Expand/Collapse Extended Keys (F1-F10, Tab, Shift, BS, PgUp/Dn, Copy, Paste, Clear, DelAll)">
+          <span>Fn</span>
+          <span class="key-mod-led" id="ledFn"></span>
+        </button>
+        <button type="button" class="pad-key key-arrow" onclick="pressPadKey('down')" title="Down Arrow (↓)">↓</button>
+        <button type="button" class="pad-key key-mod" id="padKeyAlt" onclick="toggleModifier('alt')" title="Toggle ALT (Latch/Release)">
+          <span>ALT</span>
+          <span class="key-mod-led" id="ledAlt"></span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1169,6 +1369,7 @@
     let ptyNoRetry = false;
     let virtualCtrlActive = false;
     let virtualAltActive = false;
+    let virtualShiftActive = false;
     let reconnectAttempts = 0;
     let selectRefreshTimer = null;
 
@@ -1651,7 +1852,7 @@
       document.getElementById('xtermBox').classList.toggle('hidden', termMode !== 'pty');
       document.getElementById('lineExecBox').classList.toggle('visible', termMode === 'exec');
       document.getElementById('termHeaderTitle').textContent =
-        termMode === 'pty' ? 'SSH // colab ssh (xterm.js)' : 'LINE-EXEC // colab exec per line';
+        termMode === 'pty' ? 'SSH' : 'LINE-EXEC';
       updateSessionLabel();
       reconnectTerm();
     }
@@ -1711,10 +1912,15 @@
       term.onData((data) => {
         if (termMode !== 'pty' || !ws || ws.readyState !== WebSocket.OPEN) return;
         let out = data;
-        if (virtualCtrlActive || virtualAltActive) {
+        if (virtualCtrlActive || virtualAltActive || virtualShiftActive) {
           if (data.length === 1) {
             let code = data.charCodeAt(0);
+            if (virtualShiftActive) {
+              if (code >= 97 && code <= 122) out = String.fromCharCode(code - 32);
+              else if (code >= 65 && code <= 90) out = String.fromCharCode(code + 32);
+            }
             if (virtualCtrlActive) {
+              code = out.charCodeAt(0);
               if (code >= 65 && code <= 90) out = String.fromCharCode(code - 64);
               else if (code >= 97 && code <= 122) out = String.fromCharCode(code - 96);
               else if (data === ' ' || data === '@') out = '\x00';
@@ -1792,28 +1998,118 @@
       }
     }
 
+    function toggleConnectMenu(event) {
+      if (event) event.stopPropagation();
+      const menu = document.getElementById('connectDropdownMenu');
+      const btn = document.getElementById('btnConnectMenu');
+      if (!menu) return;
+      const isOpen = menu.style.display !== 'none';
+      menu.style.display = isOpen ? 'none' : 'flex';
+      if (btn) btn.classList.toggle('active-mode', !isOpen);
+    }
+    function closeConnectMenu() {
+      const menu = document.getElementById('connectDropdownMenu');
+      const btn = document.getElementById('btnConnectMenu');
+      if (menu) menu.style.display = 'none';
+      if (btn) btn.classList.remove('active-mode');
+    }
+    document.addEventListener('click', (e) => {
+      const dropdown = document.getElementById('connectDropdown');
+      if (dropdown && !dropdown.contains(e.target)) {
+        closeConnectMenu();
+      }
+    });
+
     function toggleModifier(mod) {
       try { if (document.activeElement && document.activeElement.classList.contains('pad-key') && !document.activeElement.classList.contains('key-mod')) document.activeElement.blur(); } catch (_) {}
       if (mod === 'ctrl') {
         virtualCtrlActive = !virtualCtrlActive;
       } else if (mod === 'alt') {
         virtualAltActive = !virtualAltActive;
+      } else if (mod === 'shift') {
+        virtualShiftActive = !virtualShiftActive;
+      } else if (mod === 'fn') {
+        toggleFnPanel();
+        return;
       }
       updateModifierUI();
       try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
     }
 
+    let fnPanelActive = false;
+    function toggleFnPanel(force) {
+      const pad = document.getElementById('arrowsFloatingPad');
+      const side = document.getElementById('arrowsFnSidePanel');
+      const fnBtn = document.getElementById('padKeyFn');
+      const fnLed = document.getElementById('ledFn');
+      const title = document.getElementById('arrowsPadTitleText');
+      if (!side || !pad) return;
+
+      const willOpen = (typeof force === 'boolean') ? force : !fnPanelActive;
+      if (willOpen === fnPanelActive) return;
+
+      const prevRect = pad.getBoundingClientRect();
+
+      fnPanelActive = willOpen;
+      side.style.display = fnPanelActive ? 'grid' : 'none';
+      if (fnBtn) fnBtn.classList.toggle('active-latched', fnPanelActive);
+      if (fnLed) fnLed.classList.toggle('active', fnPanelActive);
+      if (title) title.textContent = fnPanelActive ? 'KEYPAD + EXT' : 'KEYPAD';
+
+      setStatus(fnPanelActive ? 'EXTENDED KEYPAD OPEN' : 'EXTENDED KEYPAD CLOSED', 'var(--text)');
+      try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
+
+      // Keep right edge pinned when expanding left
+      requestAnimationFrame(() => {
+        const newRect = pad.getBoundingClientRect();
+        if (pad.style.left && pad.style.left !== 'auto') {
+          const widthDiff = newRect.width - prevRect.width;
+          let newLeft = prevRect.left - widthDiff;
+          if (newLeft < 4) newLeft = 4;
+          pad.style.left = newLeft + 'px';
+        } else {
+          if (newRect.left < 4) {
+            pad.style.right = 'auto';
+            pad.style.left = '4px';
+          }
+        }
+
+        if (newRect.bottom > window.innerHeight) {
+          const overflow = newRect.bottom - window.innerHeight + 10;
+          if (pad.style.top && pad.style.top !== 'auto') {
+            pad.style.top = Math.max(10, newRect.top - overflow) + 'px';
+          } else {
+            pad.style.bottom = '10px';
+          }
+        }
+      });
+    }
+
     function updateModifierUI() {
       const ctrlBtn = document.getElementById('padKeyCtrl');
       const altBtn = document.getElementById('padKeyAlt');
+      const shiftBtn = document.getElementById('padKeyShift');
       const ctrlLed = document.getElementById('ledCtrl');
       const altLed = document.getElementById('ledAlt');
+      const shiftLed = document.getElementById('ledShift');
 
       if (ctrlBtn) ctrlBtn.classList.toggle('active-latched', virtualCtrlActive);
       if (ctrlLed) ctrlLed.classList.toggle('active', virtualCtrlActive);
 
       if (altBtn) altBtn.classList.toggle('active-latched', virtualAltActive);
       if (altLed) altLed.classList.toggle('active', virtualAltActive);
+
+      if (shiftBtn) shiftBtn.classList.toggle('active-latched', virtualShiftActive);
+      if (shiftLed) shiftLed.classList.toggle('active', virtualShiftActive);
+    }
+
+    function getXtermMod(isShift, isAlt, isCtrl) {
+      if (!isShift && !isAlt && !isCtrl) return '';
+      let m = 1;
+      if (isShift) m += 1;
+      if (isAlt) m += 2;
+      if (isCtrl) m += 4;
+      return String(m);
     }
 
     function sendTerminalRaw(data) {
@@ -1838,35 +2134,66 @@
       try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
       try { if (document.activeElement && document.activeElement.classList.contains('pad-key')) document.activeElement.blur(); } catch (_) {}
 
+      if (key === 'fn') {
+        toggleFnPanel();
+        return;
+      }
+
+      if (key === 'copy') {
+        if (term && term.hasSelection()) {
+          const sel = term.getSelection();
+          navigator.clipboard.writeText(sel)
+            .then(() => setStatus('COPIED SELECTION', 'var(--text)'))
+            .catch(() => setStatus('COPY FAILED', 'var(--red)'));
+        } else {
+          setStatus('NO SELECTION', 'var(--amber)');
+        }
+        return;
+      }
+
+      if (key === 'paste') {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText()
+            .then((text) => {
+              if (text) {
+                sendTerminalRaw(text);
+                setStatus('PASTED', 'var(--text)');
+              } else {
+                setStatus('CLIPBOARD EMPTY', 'var(--amber)');
+              }
+            })
+            .catch(() => {
+              const text = prompt('Paste text into terminal:');
+              if (text) {
+                sendTerminalRaw(text);
+                setStatus('PASTED', 'var(--text)');
+              }
+            });
+        } else {
+          const text = prompt('Paste text into terminal:');
+          if (text) {
+            sendTerminalRaw(text);
+            setStatus('PASTED', 'var(--text)');
+          }
+        }
+        return;
+      }
+
       let seq = '';
+      const isShift = virtualShiftActive;
       const isCtrl = virtualCtrlActive;
       const isAlt = virtualAltActive;
+      const mod = getXtermMod(isShift, isAlt, isCtrl);
 
       switch (key) {
         case 'up':
-          if (isCtrl && isAlt) seq = '\x1b[1;7A';
-          else if (isCtrl) seq = '\x1b[1;5A';
-          else if (isAlt) seq = '\x1b[1;3A';
-          else seq = '\x1b[A';
-          break;
         case 'down':
-          if (isCtrl && isAlt) seq = '\x1b[1;7B';
-          else if (isCtrl) seq = '\x1b[1;5B';
-          else if (isAlt) seq = '\x1b[1;3B';
-          else seq = '\x1b[B';
-          break;
         case 'right':
-          if (isCtrl && isAlt) seq = '\x1b[1;7C';
-          else if (isCtrl) seq = '\x1b[1;5C';
-          else if (isAlt) seq = '\x1b[1;3C';
-          else seq = '\x1b[C';
+        case 'left': {
+          const code = { up: 'A', down: 'B', right: 'C', left: 'D' }[key];
+          seq = mod ? `\x1b[1;${mod}${code}` : `\x1b[${code}`;
           break;
-        case 'left':
-          if (isCtrl && isAlt) seq = '\x1b[1;7D';
-          else if (isCtrl) seq = '\x1b[1;5D';
-          else if (isAlt) seq = '\x1b[1;3D';
-          else seq = '\x1b[D';
-          break;
+        }
         case 'enter':
           if (isAlt && isCtrl) {
             seq = '\x1b\n';
@@ -1883,19 +2210,64 @@
           if (isAlt) seq = '\x1b\x1b';
           else seq = '\x1b';
           break;
-        case 'f10':
-          if (isCtrl && isAlt) seq = '\x1b[21;7~';
-          else if (isCtrl) seq = '\x1b[21;5~';
-          else if (isAlt) seq = '\x1b[21;3~';
-          else seq = '\x1b[21~';
+        case 'tab':
+          if (isShift) seq = '\x1b[Z';
+          else if (isAlt) seq = '\x1b\t';
+          else seq = '\t';
           break;
+        case 'backspace':
+        case 'bs':
+          if (isAlt) seq = '\x1b\x7f';
+          else if (isCtrl) seq = '\x08';
+          else seq = '\x7f';
+          break;
+        case 'pgup':
+          seq = mod ? `\x1b[5;${mod}~` : '\x1b[5~';
+          break;
+        case 'pgdown':
+          seq = mod ? `\x1b[6;${mod}~` : '\x1b[6~';
+          break;
+        case 'clear':
+          seq = '\x0c'; // Ctrl+L clears terminal screen
+          break;
+        case 'delall':
+          seq = '\x01\x0b'; // Ctrl+A (beginning of line) then Ctrl+K (kill line to end)
+          break;
+        case 'f1':
+        case 'f2':
+        case 'f3':
+        case 'f4': {
+          const char = { f1: 'P', f2: 'Q', f3: 'R', f4: 'S' }[key];
+          seq = mod ? `\x1b[1;${mod}${char}` : `\x1bO${char}`;
+          break;
+        }
+        case 'f5':
+        case 'f6':
+        case 'f7':
+        case 'f8':
+        case 'f9':
+        case 'f10':
+        case 'f11':
+        case 'f12': {
+          const num = { f5: 15, f6: 17, f7: 18, f8: 19, f9: 20, f10: 21, f11: 23, f12: 24 }[key];
+          seq = mod ? `\x1b[${num};${mod}~` : `\x1b[${num}~`;
+          break;
+        }
         default:
           return;
       }
 
       if (seq) {
         sendTerminalRaw(seq);
-        setStatus(key.toUpperCase() + ' SENT', 'var(--text)');
+        const labelMap = {
+          delall: 'DEL ALL (CTRL+A, CTRL+K)',
+          clear: 'CLEAR (CTRL+L)',
+          backspace: 'BACKSPACE',
+          tab: isShift ? 'BACKTAB' : 'TAB',
+          pgup: 'PAGE UP',
+          pgdown: 'PAGE DOWN'
+        };
+        setStatus((labelMap[key] || key.toUpperCase()) + ' SENT', 'var(--text)');
       }
     }
 
@@ -2478,14 +2850,6 @@
             termTranscript = '';
             sendResize();
             return;
-          }
-          if (localStorage.getItem('colab_tmux') === '1' && ws === sock && sock.readyState === WebSocket.OPEN) {
-            setTimeout(() => {
-              if (ws === sock && sock.readyState === WebSocket.OPEN) {
-                sock.send(JSON.stringify({ type: 'stdin', data:
-                  " if command -v tmux >/dev/null 2>&1; then exec tmux new-session -A -s colab; else echo '[tmux not found: run apt-get install -y tmux, or untick tmux keep-alive]'; fi\r" }));
-              }
-            }, 300);
           }
           term.writeln('\x1b[32m[ssh ready]\x1b[0m');
           appendTranscript('[ssh ready]\n');
@@ -3384,7 +3748,6 @@
     initArrowsPadDrag();
     initCommandsPad();
     initTermLinkChip();
-    { const c = document.getElementById('chkTmux'); if (c) c.checked = localStorage.getItem('colab_tmux') === '1'; }
     updateSessionLabel();
     loadConnectionCfgIntoForm();
     setTermMode(termMode);
