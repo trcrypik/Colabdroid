@@ -101,8 +101,31 @@
     }
     .terminal-header {
       flex-shrink: 0; background: #090d14; border-bottom: 1px solid var(--border);
-      padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;
-      color: var(--cyan); font-size: 11px;
+      padding: 6px 12px; display: flex; justify-content: space-between; align-items: center;
+      color: var(--cyan); font-size: 11px; gap: 8px;
+    }
+    .terminal-header-right {
+      display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 0;
+    }
+    #termStatus {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right;
+    }
+    .term-scroll-nav {
+      display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+    }
+    .term-scroll-btn {
+      background: var(--card-bg); border: 1px solid var(--border); color: var(--cyan);
+      font-family: inherit; font-size: calc(10.5px * var(--ui-button-scale)); font-weight: bold; line-height: 1;
+      padding: calc(3px * var(--ui-button-scale)) calc(6px * var(--ui-button-scale));
+      border-radius: 3px; cursor: pointer; user-select: none; -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent; transition: all 0.15s ease;
+    }
+    .term-scroll-btn:hover {
+      border-color: var(--cyan); color: #ffffff; background: rgba(0, 240, 255, 0.18);
+      box-shadow: 0 0 6px rgba(0, 240, 255, 0.35);
+    }
+    .term-scroll-btn:active {
+      background: rgba(0, 240, 255, 0.35); transform: translateY(1px);
     }
     #xtermBox { flex: 1; min-height: 0; padding: 4px; overflow: hidden; }
     #xtermBox .xterm { height: 100%; }
@@ -178,12 +201,52 @@
       display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
     }
     .fm-path input { flex: 1; min-width: 140px; }
+    .fm-path-input-wrap {
+      flex: 1; min-width: 140px; position: relative; display: flex; align-items: center;
+    }
+    .fm-path-input-wrap input { width: 100%; padding-right: 28px; }
+    .fm-path-copy-btn {
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    }
+    .fm-name-wrap {
+      display: inline-flex; align-items: center; gap: 6px; max-width: 100%; vertical-align: middle;
+    }
+    .fm-copy-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 1px solid transparent; color: #718096;
+      padding: 2px 4px; border-radius: 3px; cursor: pointer; line-height: 1;
+      opacity: 0.55; transition: all 0.15s ease; vertical-align: middle; flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fm-copy-btn:hover, .fm-table tr:hover .fm-copy-btn {
+      opacity: 1; color: var(--cyan); border-color: rgba(0, 240, 255, 0.35); background: rgba(0, 240, 255, 0.08);
+    }
+    .fm-copy-btn.copied {
+      opacity: 1 !important; color: var(--text) !important; border-color: var(--text) !important;
+      background: rgba(0, 255, 102, 0.18) !important;
+    }
+    .fm-copy-btn.copied .fm-copy-icon { display: none !important; }
+    .fm-copy-btn.copied .fm-check-icon { display: inline-block !important; }
     .fm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .fm-table th { text-align: left; color: var(--cyan); border-bottom: 1px solid var(--border); padding: 6px 4px; }
     .fm-table td { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 6px 4px; color: #d1d5db; }
     .fm-table tr:hover td { background: rgba(0,255,102,0.05); }
     .fm-table .name { color: var(--text); cursor: pointer; }
+    .fm-table .name:not(.dir):hover { text-decoration: underline; color: #fff; }
     .fm-table .dir { color: var(--cyan); }
+    .app-toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #090d14; border: 1px solid var(--text); color: var(--text);
+      box-shadow: 0 0 16px rgba(0, 255, 102, 0.35); padding: 8px 14px;
+      font-size: 11px; font-family: inherit; border-radius: 4px;
+      z-index: 999999; pointer-events: none; opacity: 0;
+      transform: translateY(8px); transition: opacity 0.2s ease, transform 0.2s ease;
+      max-width: calc(100vw - 48px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .app-toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 600px) {
+      .app-toast { bottom: 16px; right: 16px; left: 16px; max-width: none; text-align: center; }
+    }
     .nb-item {
       display: flex; justify-content: space-between; align-items: center; gap: 8px;
       padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); flex-wrap: wrap;
@@ -913,6 +976,7 @@
       .terminal-input-bar .btn { padding-left: 8px; padding-right: 8px; }
       .fm-path { align-items: stretch; }
       .fm-path input { flex: 1 1 100%; min-width: 0; }
+      .fm-path-input-wrap { flex: 1 1 100%; min-width: 0; }
       .fm-path .btn { flex: 1 1 auto; }
       .arrows-pad { right: 8px; bottom: 8px; transform: scale(.82); transform-origin: bottom right; }
       .commands-pad { right: 8px; bottom: 8px; max-height: 55dvh; }
@@ -1005,7 +1069,15 @@
       <div class="terminal-container">
         <div class="terminal-header">
           <span id="termHeaderTitle">SSH</span>
-          <span id="termStatus">OFFLINE</span>
+          <div class="terminal-header-right">
+            <span id="termStatus">OFFLINE</span>
+            <div class="term-scroll-nav" role="toolbar" aria-label="Terminal scroll navigation">
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault()" onclick="termScroll('home')" title="Scroll to top (Home)">HOME</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault()" onclick="termScroll('pageup')" title="Scroll page up (Page Up)">↑</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault()" onclick="termScroll('pagedown')" title="Scroll page down (Page Down)">↓</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault()" onclick="termScroll('end')" title="Scroll to bottom (End)">END</button>
+            </div>
+          </div>
         </div>
         <div id="termLinkChip" style="display:none;flex-direction:column;gap:6px;padding:6px 10px;background:rgba(255,176,0,0.10);border-bottom:1px solid var(--amber);font-size:11px;">
           <div style="display:flex;align-items:center;gap:6px;">
@@ -1103,7 +1175,18 @@
         <div class="card-title"><span>FILE MANAGER (VM)</span></div>
         <div class="fm-path">
           <button class="btn" type="button" onclick="fmUp()">[UP]</button>
-          <input type="text" id="fmPath" value="/content" />
+          <div class="fm-path-input-wrap">
+            <input type="text" id="fmPath" value="/content" />
+            <button class="fm-copy-btn fm-path-copy-btn" type="button" onclick="copyCurrentPath(this)" title="Copy current path" aria-label="Copy current path">
+              <svg class="fm-copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <svg class="fm-check-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </button>
+          </div>
           <button class="btn" type="button" onclick="fmList()">[GO]</button>
           <button class="btn" type="button" onclick="fmList()">[REFRESH]</button>
           <label class="btn btn-cyan" style="display:inline-block;cursor:pointer;">
@@ -2271,6 +2354,50 @@
       }
     }
 
+    function termScroll(dir) {
+      if (selectMode) {
+        const pan = document.getElementById('selectModePanel');
+        if (!pan) return;
+        const page = pan.clientHeight || 200;
+        if (dir === 'home') pan.scrollTop = 0;
+        else if (dir === 'end') pan.scrollTop = pan.scrollHeight;
+        else if (dir === 'pageup' || dir === 'up') pan.scrollTop = Math.max(0, pan.scrollTop - page);
+        else if (dir === 'pagedown' || dir === 'down') pan.scrollTop = Math.min(pan.scrollHeight, pan.scrollTop + page);
+        return;
+      }
+
+      if (termMode === 'exec') {
+        const logs = document.getElementById('terminalLogs');
+        if (!logs) return;
+        const page = logs.clientHeight || 200;
+        if (dir === 'home') logs.scrollTop = 0;
+        else if (dir === 'end') logs.scrollTop = logs.scrollHeight;
+        else if (dir === 'pageup' || dir === 'up') logs.scrollTop = Math.max(0, logs.scrollTop - page);
+        else if (dir === 'pagedown' || dir === 'down') logs.scrollTop = Math.min(logs.scrollHeight, logs.scrollTop + page);
+        return;
+      }
+
+      if (term) {
+        try {
+          if (dir === 'home') {
+            if (typeof term.scrollToTop === 'function') term.scrollToTop();
+            else if (typeof term.scrollLines === 'function') term.scrollLines(-100000);
+          } else if (dir === 'end') {
+            if (typeof term.scrollToBottom === 'function') term.scrollToBottom();
+            else if (typeof term.scrollLines === 'function') term.scrollLines(100000);
+          } else if (dir === 'pageup' || dir === 'up') {
+            if (typeof term.scrollPages === 'function') term.scrollPages(-1);
+            else if (typeof term.scrollLines === 'function') term.scrollLines(-(term.rows || 24));
+          } else if (dir === 'pagedown' || dir === 'down') {
+            if (typeof term.scrollPages === 'function') term.scrollPages(1);
+            else if (typeof term.scrollLines === 'function') term.scrollLines(term.rows || 24);
+          }
+        } catch (e) {
+          console.warn('termScroll error', e);
+        }
+      }
+    }
+
     function initArrowsPadDrag() {
       const pad = document.getElementById('arrowsFloatingPad');
       const handle = document.getElementById('arrowsPadHeader');
@@ -3421,6 +3548,75 @@
       return '<div class="hw-tile"><div class="k">' + esc(k) + '</div><div class="v">' + esc(String(v)) + '</div></div>';
     }
 
+    let toastTimer = null;
+    function showToast(msg) {
+      let toast = document.getElementById('appToast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'appToast';
+        toast.className = 'app-toast';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2200);
+    }
+
+    function copyToClipboard(text) {
+      if (!text) return Promise.resolve(false);
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text).then(() => true).catch(() => fallbackCopyText(text));
+      }
+      return Promise.resolve(fallbackCopyText(text));
+    }
+
+    function fallbackCopyText(text) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.top = '0';
+        ta.style.left = '0';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) return true;
+      } catch (e) {}
+      prompt('Copy to clipboard:', text);
+      return false;
+    }
+
+    function copyFilePath(e, path, targetEl) {
+      if (e) {
+        e.stopPropagation();
+        if (e.type === 'contextmenu') e.preventDefault();
+      }
+      copyToClipboard(path).then((ok) => {
+        const log = document.getElementById('fmLog');
+        if (log) {
+          log.className = 'log-box ok';
+          log.textContent = 'COPIED PATH: ' + path;
+        }
+        showToast('✓ COPIED: ' + path);
+        const el = targetEl || (e && (e.currentTarget || e.target));
+        if (el && el.classList) {
+          el.classList.add('copied');
+          setTimeout(() => el.classList.remove('copied'), 1500);
+        }
+      });
+    }
+
+    function copyCurrentPath(btn) {
+      const p = (document.getElementById('fmPath').value || '/content').trim();
+      copyFilePath(null, p, btn);
+    }
+
     async function fmList() {
       const input = document.getElementById('fmPath');
       fmPath = (input.value || '/content').trim() || '/content';
@@ -3446,16 +3642,38 @@
         log.className = 'log-box ok';
         log.textContent = 'Path: ' + (d.path || fmPath) + ' · ' + (d.entries || []).length + ' items';
         if (fmPath !== '/' && fmPath !== '') {
+          const parent = parentPath(fmPath);
           const tr = document.createElement('tr');
-          tr.innerHTML = '<td class="name dir" onclick="fmNavigate(\'' + escAttr(parentPath(fmPath)) + '\')">.. /</td><td></td><td></td>';
+          const nameSpan = '<span class="name dir" onclick="fmNavigate(\'' + escAttr(parent) + '\')">.. /</span>';
+          const copyBtn = '<button class="fm-copy-btn" type="button" onclick="copyFilePath(event, \'' + escAttr(parent) + '\', this)" title="Copy parent path" aria-label="Copy parent path">' +
+            '<svg class="fm-copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>' +
+              '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>' +
+            '</svg>' +
+            '<svg class="fm-check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none;">' +
+              '<polyline points="20 6 9 17 4 12"></polyline>' +
+            '</svg>' +
+          '</button>';
+          tr.innerHTML = '<td><div class="fm-name-wrap">' + nameSpan + copyBtn + '</div></td><td></td><td></td>';
+          tr.oncontextmenu = (ev) => copyFilePath(ev, parent, tr);
           body.appendChild(tr);
         }
         (d.entries || []).forEach(ent => {
           const tr = document.createElement('tr');
           const isDir = !!ent.is_dir;
-          const nameHtml = isDir
+          const nameSpan = isDir
             ? '<span class="name dir" onclick="fmNavigate(\'' + escAttr(ent.path) + '\')">' + esc(ent.name) + '/</span>'
-            : '<span class="name">' + esc(ent.name) + '</span>';
+            : '<span class="name" onclick="copyFilePath(event, \'' + escAttr(ent.path) + '\', this)" title="Click to copy path">' + esc(ent.name) + '</span>';
+          const copyBtn = '<button class="fm-copy-btn" type="button" onclick="copyFilePath(event, \'' + escAttr(ent.path) + '\', this)" title="Copy path" aria-label="Copy path">' +
+            '<svg class="fm-copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>' +
+              '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>' +
+            '</svg>' +
+            '<svg class="fm-check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none;">' +
+              '<polyline points="20 6 9 17 4 12"></polyline>' +
+            '</svg>' +
+          '</button>';
+          const nameHtml = '<div class="fm-name-wrap">' + nameSpan + copyBtn + '</div>';
           let actions = '';
           if (!isDir) {
             actions = '<button class="btn" type="button" onclick="fmDownload(\'' + escAttr(ent.path) + '\')">[DL]</button> ';
@@ -3467,6 +3685,7 @@
             '<td>' + nameHtml + '</td>' +
             '<td>' + (isDir ? 'DIR' : fmtSize(ent.size)) + '</td>' +
             '<td>' + actions + '</td>';
+          tr.oncontextmenu = (ev) => copyFilePath(ev, ent.path, tr);
           body.appendChild(tr);
         });
         if (!(d.entries || []).length && d.output) {
