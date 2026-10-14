@@ -12,6 +12,7 @@
       --amber: #ffb000; --red: #ff3366; --dark: #050608;
       --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
       --ui-font-size: 13px;
+      --ui-header-font-size: 13px;
       --ui-button-scale: 1;
       --ui-font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     }
@@ -33,10 +34,10 @@
       padding: 10px 16px; display: flex; justify-content: space-between;
       align-items: center; flex-wrap: wrap; gap: 8px; z-index: 20;
     }
-    .brand { font-size: 15px; font-weight: bold; letter-spacing: 1px; display: flex; gap: 8px; align-items: center;
+    .brand { font-size: calc(var(--ui-header-font-size) + 2px); font-weight: bold; letter-spacing: 1px; display: flex; gap: 8px; align-items: center;
       text-shadow: 0 0 8px rgba(0,255,102,0.4); }
     .sys-badge { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; padding: 3px 8px;
-      border: 1px solid var(--border); border-radius: 3px; font-size: 12px; background: rgba(0,240,255,0.05);
+      border: 1px solid var(--border); border-radius: 3px; font-size: calc(var(--ui-header-font-size) - 1px); background: rgba(0,240,255,0.05);
       font-variant-numeric: tabular-nums; white-space: nowrap; }
     .sys-badge #sysClock { color: var(--cyan); font-weight: bold; letter-spacing: 0.5px; }
     .sys-badge #sysBattery.bat-low { color: var(--amber); }
@@ -49,7 +50,7 @@
     }
     .status-badge {
       display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px;
-      border: 1px solid var(--border); border-radius: 3px; font-size: 11px;
+      border: 1px solid var(--border); border-radius: 3px; font-size: calc(var(--ui-header-font-size) - 2px);
       background: rgba(0,255,102,0.05);
     }
     .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text); box-shadow: 0 0 6px var(--text); }
@@ -61,7 +62,7 @@
     .tab-btn {
       background: transparent; border: 1px solid transparent; color: #718096;
       padding: calc(6px * var(--ui-button-scale)) calc(12px * var(--ui-button-scale));
-      font-family: inherit; font-size: calc(12px * var(--ui-button-scale)); cursor: pointer;
+      font-family: inherit; font-size: calc(var(--ui-header-font-size) - 1px * var(--ui-button-scale)); cursor: pointer;
       text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
     }
     .tab-btn:hover { color: var(--text); border-color: var(--border); }
@@ -83,7 +84,7 @@
     .btn {
       background: var(--card-bg); border: 1px solid var(--border); color: var(--text);
       padding: calc(6px * var(--ui-button-scale)) calc(12px * var(--ui-button-scale));
-      font-family: inherit; font-size: calc(11px * var(--ui-button-scale)); cursor: pointer;
+      font-family: inherit; font-size: calc(var(--ui-font-size) - 2px); cursor: pointer;
       text-transform: uppercase; letter-spacing: 0.5px;
     }
     .btn:hover { border-color: var(--text); background: rgba(0,255,102,0.1); }
@@ -102,7 +103,7 @@
     .terminal-header {
       flex-shrink: 0; background: #090d14; border-bottom: 1px solid var(--border);
       padding: 6px 12px; display: flex; justify-content: space-between; align-items: center;
-      color: var(--cyan); font-size: 11px; gap: 8px;
+      color: var(--cyan); font-size: calc(var(--ui-header-font-size) - 2px); gap: 8px;
     }
     .terminal-header-right {
       display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 0;
@@ -115,7 +116,7 @@
     }
     .term-scroll-btn {
       background: var(--card-bg); border: 1px solid var(--border); color: var(--cyan);
-      font-family: inherit; font-size: calc(10.5px * var(--ui-button-scale)); font-weight: bold; line-height: 1;
+      font-family: inherit; font-size: calc((var(--ui-font-size) - 2.5px) * var(--ui-button-scale)); font-weight: bold; line-height: 1;
       padding: calc(3px * var(--ui-button-scale)) calc(6px * var(--ui-button-scale));
       border-radius: 3px; cursor: pointer; user-select: none; -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent; transition: all 0.15s ease;
@@ -165,20 +166,20 @@
       padding: 14px; display: flex; flex-direction: column; gap: 10px;
     }
     .card-title {
-      color: var(--cyan); font-size: 13px; border-bottom: 1px solid var(--border);
+      color: var(--cyan); font-size: var(--ui-header-font-size); border-bottom: 1px solid var(--border);
       padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
     }
-    .stat-label { color: #8892b0; font-size: 11px; }
+    .stat-label { color: #8892b0; font-size: calc(var(--ui-header-font-size) - 2px); }
     input[type="text"], input[type="password"], select, textarea {
       background: var(--dark); border: 1px solid var(--border); color: #fff;
-      padding: 8px 10px; font-family: inherit; font-size: 12px; border-radius: 3px;
+      padding: 8px 10px; font-family: inherit; font-size: var(--ui-font-size); border-radius: 3px;
       outline: none; width: 100%;
     }
     input:focus, select:focus, textarea:focus { border-color: var(--text); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
     .log-box {
       background: var(--dark); border: 1px solid var(--border); border-radius: 3px;
-      padding: 10px; color: #d1d5db; font-size: 11px; white-space: pre-wrap;
+      padding: 10px; color: #d1d5db; font-size: calc(var(--ui-font-size) - 2px); white-space: pre-wrap;
       word-break: break-word; max-height: 220px; overflow-y: auto; user-select: text;
     }
     .log-box.err { border-color: rgba(255,51,102,0.5); color: #ff8aa8; }
@@ -186,7 +187,7 @@
     #nbOut {
       max-height: 50vh;
       min-height: 120px;
-      font-size: 12px;
+      font-size: var(--ui-font-size);
       line-height: 1.45;
     }
     .nb-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -195,8 +196,8 @@
     .hw-tile {
       background: var(--dark); border: 1px solid var(--border); border-radius: 4px; padding: 10px;
     }
-    .hw-tile .k { color: #8892b0; font-size: 10px; text-transform: uppercase; }
-    .hw-tile .v { color: #fff; font-size: 14px; font-weight: bold; margin-top: 4px; word-break: break-all; }
+    .hw-tile .k { color: #8892b0; font-size: calc(var(--ui-header-font-size) - 3px); text-transform: uppercase; }
+    .hw-tile .v { color: #fff; font-size: calc(var(--ui-font-size) + 1px); font-weight: bold; margin-top: 4px; word-break: break-all; }
     .fm-path {
       display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
     }
@@ -227,8 +228,8 @@
     }
     .fm-copy-btn.copied .fm-copy-icon { display: none !important; }
     .fm-copy-btn.copied .fm-check-icon { display: inline-block !important; }
-    .fm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .fm-table th { text-align: left; color: var(--cyan); border-bottom: 1px solid var(--border); padding: 6px 4px; }
+    .fm-table { width: 100%; border-collapse: collapse; font-size: var(--ui-font-size); }
+    .fm-table th { text-align: left; color: var(--cyan); border-bottom: 1px solid var(--border); padding: 6px 4px; font-size: var(--ui-header-font-size); }
     .fm-table td { border-bottom: 1px solid rgba(255,255,255,0.06); padding: 6px 4px; color: #d1d5db; }
     .fm-table tr:hover td { background: rgba(0,255,102,0.05); }
     .fm-table .name { color: var(--text); cursor: pointer; }
@@ -238,7 +239,7 @@
       position: fixed; bottom: 24px; right: 24px;
       background: #090d14; border: 1px solid var(--text); color: var(--text);
       box-shadow: 0 0 16px rgba(0, 255, 102, 0.35); padding: 8px 14px;
-      font-size: 11px; font-family: inherit; border-radius: 4px;
+      font-size: calc(var(--ui-font-size) - 2px); font-family: inherit; border-radius: 4px;
       z-index: 999999; pointer-events: none; opacity: 0;
       transform: translateY(8px); transition: opacity 0.2s ease, transform 0.2s ease;
       max-width: calc(100vw - 48px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -251,8 +252,8 @@
       display: flex; justify-content: space-between; align-items: center; gap: 8px;
       padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); flex-wrap: wrap;
     }
-    .nb-item .path { color: #8892b0; font-size: 11px; word-break: break-all; }
-    .hint { color: #666; font-size: 11px; }
+    .nb-item .path { color: #8892b0; font-size: calc(var(--ui-font-size) - 2px); word-break: break-all; }
+    .hint { color: #666; font-size: calc(var(--ui-font-size) - 2px); }
     .auth-banner { flex-shrink: 0; max-height: 75%; overflow-y: auto; border-color: var(--amber); box-shadow: 0 0 12px rgba(255,176,0,0.25); }
     .auth-banner { position: relative; }
     .auth-banner .card-title { color: var(--amber); padding-right: 34px; }
@@ -295,8 +296,8 @@
       position: fixed;
       bottom: 24px;
       right: 24px;
-      width: auto;
-      max-width: calc(100vw - 12px);
+      width: max-content;
+      max-width: none;
       background: rgba(13, 18, 29, 0.96);
       border: 1px solid rgba(0, 240, 255, 0.45);
       border-radius: 6px;
@@ -323,7 +324,7 @@
     }
     .arrows-pad-header:active { cursor: grabbing; }
     .arrows-pad-title {
-      font-size: 11px;
+      font-size: calc(var(--ui-header-font-size) - 2px);
       font-weight: bold;
       color: var(--cyan);
       display: flex;
@@ -367,7 +368,7 @@
       border: 1px solid var(--border);
       color: #d1d5db;
       font-family: var(--font-mono);
-      font-size: 13px;
+      font-size: var(--ui-font-size);
       font-weight: bold;
       height: 44px;
       border-radius: 4px;
@@ -430,7 +431,7 @@
     }
     .pad-key.key-esc {
       color: #ff8aa8;
-      font-size: 12px;
+      font-size: calc(var(--ui-font-size) - 1px);
       border-color: rgba(255, 51, 102, 0.35);
     }
     @media (hover: hover) and (pointer: fine) {
@@ -439,7 +440,7 @@
     .pad-key.key-f10,
     .pad-key.key-fn {
       color: var(--amber);
-      font-size: 12px;
+      font-size: calc(var(--ui-font-size) - 1px);
       border-color: rgba(255, 176, 0, 0.35);
     }
     @media (hover: hover) and (pointer: fine) {
@@ -465,10 +466,28 @@
       padding: 8px 6px 8px 8px;
       border-right: 1px dashed rgba(0, 240, 255, 0.25);
       background: #06080d;
+      flex-shrink: 0;
+    }
+    .arrows-vert-side {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 8px 6px 8px 8px;
+      border-right: 1px dashed rgba(0, 240, 255, 0.25);
+      background: #06080d;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .arrows-vert-side .pad-key {
+      width: 48px;
+      height: 32px;
+      font-size: 10px;
+      color: var(--cyan);
+      border-color: rgba(0, 240, 255, 0.35);
     }
     .pad-key.key-ext-fn {
       color: var(--amber);
-      font-size: 11px;
+      font-size: calc(var(--ui-font-size) - 2px);
       border-color: rgba(255, 176, 0, 0.35);
       height: 32px;
     }
@@ -538,31 +557,13 @@
         color: #fff;
       }
     }
-    @media (max-width: 520px) {
-      .arrows-fn-side {
-        grid-template-columns: repeat(5, minmax(32px, 1fr));
-        gap: 4px;
-        padding: 6px 4px 6px 6px;
-      }
-      .arrows-grid {
-        width: 156px;
-        gap: 4px;
-        padding: 6px;
-      }
-      .pad-key {
-        font-size: 11px;
-        height: 38px;
-      }
-      .pad-key.key-ext-fn,
-      .pad-key.key-ext-nav,
-      .pad-key.key-ext-action,
-      .pad-key.key-ext-danger {
-        height: 28px;
-        font-size: 9px;
-      }
+    .pad-key {
+      min-width: 0;
+      padding: 0 2px;
+      white-space: nowrap;
     }
     .pad-key.key-mod {
-      font-size: 11px;
+      font-size: calc(var(--ui-font-size) - 2px);
       letter-spacing: 0.5px;
       position: relative;
     }
@@ -575,6 +576,50 @@
       top: 4px;
       right: 4px;
       transition: all 0.15s ease;
+    }
+    @media (max-width: 520px) {
+      .arrows-fn-side {
+        grid-template-columns: repeat(5, minmax(32px, 1fr));
+        gap: 4px;
+        padding: 6px 4px 6px 6px;
+      }
+      .arrows-vert-side {
+        gap: 4px;
+        padding: 6px 4px;
+      }
+      .arrows-vert-side .pad-key {
+        width: 38px;
+        height: 28px;
+        font-size: 9px;
+      }
+      .arrows-grid {
+        width: 150px;
+        gap: 4px;
+        padding: 6px;
+      }
+      .pad-key {
+        font-size: 11px;
+        height: 38px;
+      }
+      .pad-key.key-mod {
+        font-size: 10px;
+        letter-spacing: 0;
+      }
+      .pad-key.key-mod .key-mod-led {
+        width: 5px;
+        height: 5px;
+        top: 3px;
+        right: 3px;
+      }
+      .pad-key.key-ext-fn,
+      .pad-key.key-ext-nav,
+      .pad-key.key-ext-action,
+      .pad-key.key-ext-danger,
+      .arrows-fn-side .pad-key.key-mod {
+        height: 28px;
+        font-size: 9px;
+        letter-spacing: 0;
+      }
     }
     .pad-key.key-mod.active-latched {
       background: rgba(0, 240, 255, 0.24) !important;
@@ -621,7 +666,7 @@
     }
     .commands-pad-header:active { cursor: grabbing; }
     .commands-pad-title {
-      font-size: 11px;
+      font-size: calc(var(--ui-header-font-size) - 2px);
       font-weight: bold;
       color: var(--cyan);
       display: flex;
@@ -682,7 +727,7 @@
     .commands-list::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
     .commands-empty {
       color: #718096;
-      font-size: 11px;
+      font-size: calc(var(--ui-font-size) - 2px);
       text-align: center;
       padding: 20px 8px;
       font-family: var(--font-mono);
@@ -729,7 +774,7 @@
       border: none;
       color: #d1d5db;
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: calc(var(--ui-font-size) - 1px);
       font-weight: bold;
       text-align: left;
       padding: 6px 4px;
@@ -825,7 +870,7 @@
       justify-content: space-between;
     }
     .cmd-modal-title {
-      font-size: 12px;
+      font-size: calc(var(--ui-header-font-size) - 1px);
       font-weight: bold;
       letter-spacing: 0.5px;
       display: flex;
@@ -893,7 +938,7 @@
     }
     .ext-modal-title {
       color: var(--cyan);
-      font-size: 12px;
+      font-size: calc(var(--ui-header-font-size) - 1px);
       font-weight: bold;
       display: flex;
       align-items: center;
@@ -903,7 +948,7 @@
     }
     .ext-modal-url {
       color: #8892b0;
-      font-size: 11px;
+      font-size: calc(var(--ui-font-size) - 2px);
       font-weight: normal;
       white-space: nowrap;
       overflow: hidden;
@@ -930,7 +975,7 @@
       border-bottom: 1px solid rgba(255, 176, 0, 0.35);
       color: var(--amber);
       padding: 6px 12px;
-      font-size: 11px;
+      font-size: calc(var(--ui-font-size) - 2px);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -945,8 +990,8 @@
       position: relative;
       background: #050608;
     }
-    .ext-modal-fallback { padding: 20px; color: var(--text); font-size: 13px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
-    .ext-modal-fallback textarea { width: 100%; background: #050608; color: var(--cyan); border: 1px solid var(--cyan); padding: 8px; font-family: inherit; font-size: 12px; word-break: break-all; resize: vertical; }
+    .ext-modal-fallback { padding: 20px; color: var(--text); font-size: var(--ui-font-size); display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+    .ext-modal-fallback textarea { width: 100%; background: #050608; color: var(--cyan); border: 1px solid var(--cyan); padding: 8px; font-family: inherit; font-size: calc(var(--ui-font-size) - 1px); word-break: break-all; resize: vertical; }
     .ext-modal-iframe {
       flex: 1;
       width: 100%;
@@ -960,15 +1005,15 @@
         padding: 5px 8px; gap: 4px;
         display: grid; grid-template-columns: 1fr auto;
       }
-      header > .brand { min-width: 0; font-size: 12px; letter-spacing: 0; }
-      header > .sys-badge { order: initial; grid-column: 2; grid-row: 1; margin: 0; font-size: 10px; }
+      header > .brand { min-width: 0; font-size: calc(var(--ui-header-font-size) - 1px); letter-spacing: 0; }
+      header > .sys-badge { order: initial; grid-column: 2; grid-row: 1; margin: 0; font-size: calc(var(--ui-header-font-size) - 3px); }
       header > .hdr-status {
         order: initial; grid-column: 1 / -1; flex-basis: auto;
         gap: 4px !important;
       }
-      .status-badge { padding: 2px 5px; gap: 4px; font-size: 9px; }
+      .status-badge { padding: 2px 5px; gap: 4px; font-size: calc(var(--ui-header-font-size) - 4px); }
       nav { padding: 4px 6px; gap: 3px; }
-      .tab-btn { padding: 6px 8px; font-size: 10px; }
+      .tab-btn { padding: 6px 8px; font-size: calc(var(--ui-header-font-size) - 3px); }
       main { padding: 6px; gap: 6px; }
       .term-toolbar { gap: 5px; }
       .terminal-container { min-height: 0; }
@@ -1072,10 +1117,10 @@
           <div class="terminal-header-right">
             <span id="termStatus">OFFLINE</span>
             <div class="term-scroll-nav" role="toolbar" aria-label="Terminal scroll navigation">
-              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault()" onclick="termScroll('home')" title="Scroll to top (Home)">HOME</button>
-              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault()" onclick="termScroll('pageup')" title="Scroll page up (Page Up)">↑</button>
-              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault()" onclick="termScroll('pagedown')" title="Scroll page down (Page Down)">↓</button>
-              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault()" onclick="termScroll('end')" title="Scroll to bottom (End)">END</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault(); document.activeElement.blur();" onclick="termScroll('home', event)" title="Scroll to top (Home)">HOME</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault(); document.activeElement.blur();" onclick="termScroll('pageup', event)" title="Scroll page up (Page Up)">↑</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault(); document.activeElement.blur();" onclick="termScroll('pagedown', event)" title="Scroll page down (Page Down)">↓</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault(); document.activeElement.blur();" onclick="termScroll('end', event)" title="Scroll to bottom (End)">END</button>
             </div>
           </div>
         </div>
@@ -1253,7 +1298,7 @@
     <div id="tab-ui" class="tab-content">
       <div class="card">
         <div class="card-title">НАСТРОЙКИ ИНТЕРФЕЙСА</div>
-        <p class="hint">Персональная настройка шрифта, размера текста (включая терминал и логи) и масштаба элементов управления.</p>
+        <p class="hint">Персональная настройка шрифта, размера текста (в заголовках и везде на главном экране) и масштаба элементов управления.</p>
         <div class="grid">
           <div>
             <label class="stat-label">ШРИФТ</label>
@@ -1265,11 +1310,15 @@
           </div>
           <div>
             <label class="stat-label">РАЗМЕР ТЕКСТА: <span id="uiFontSizeValue" style="color:var(--cyan);">13</span>px</label>
-            <input id="uiFontSize" type="range" min="8" max="18" step="1" value="13" />
+            <input id="uiFontSize" type="range" min="8" max="22" step="1" value="13" />
+          </div>
+          <div>
+            <label class="stat-label">РАЗМЕР ЗАГОЛОВКОВ: <span id="uiHeaderFontSizeValue" style="color:var(--cyan);">13</span>px</label>
+            <input id="uiHeaderFontSize" type="range" min="8" max="22" step="1" value="13" />
           </div>
           <div>
             <label class="stat-label">РАЗМЕР КНОПОК: <span id="uiButtonScaleValue" style="color:var(--cyan);">100</span>%</label>
-            <input id="uiButtonScale" type="range" min="0.4" max="1.5" step="0.05" value="1" />
+            <input id="uiButtonScale" type="range" min="0.3" max="1.5" step="0.05" value="1" />
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
@@ -1321,6 +1370,14 @@
         <button type="button" class="pad-key key-ext-action key-ext-paste" onclick="pressPadKey('paste')" title="Paste clipboard to terminal">PASTE</button>
         <button type="button" class="pad-key key-ext-action key-ext-clear" onclick="pressPadKey('clear')" title="Clear terminal screen (Ctrl+L)">CLEAR</button>
         <button type="button" class="pad-key key-ext-danger key-ext-delall" onclick="pressPadKey('delall')" title="Delete entire line (Ctrl+A, Ctrl+K)">DEL ALL</button>
+      </div>
+
+      <!-- Vertical row: HOME, END, SPACE, / -->
+      <div class="arrows-vert-side" aria-label="Quick navigation keypad">
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('home')" title="Home">HOME</button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('end')" title="End">END</button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('space')" title="Space">SPACE</button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('slash')" title="Slash"> / </button>
       </div>
 
       <!-- Right main arrows grid -->
@@ -1438,6 +1495,18 @@
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
   <script>
+    try { window.localStorage.getItem('__test'); } catch (e) {
+      const _memStore = {};
+      try {
+        Object.defineProperty(window, 'localStorage', {
+          value: {
+            getItem: (k) => (_memStore.hasOwnProperty(k) ? _memStore[k] : null),
+            setItem: (k, v) => { _memStore[k] = String(v); },
+            removeItem: (k) => { delete _memStore[k]; }
+          }
+        });
+      } catch (_) {}
+    }
     let activeSession = localStorage.getItem('colab_active_session') || '';
     let termMode = localStorage.getItem('colab_term_mode') || 'pty';
     let termSid = localStorage.getItem('colab_term_sid');
@@ -2061,6 +2130,47 @@
       }
     }
 
+    function getPadScale(pad) {
+      const naturalW = pad.offsetWidth || pad.scrollWidth || 1;
+      const vw = window.innerWidth || document.documentElement.clientWidth || 360;
+      const baseScale = vw <= 700 ? 0.82 : 1;
+      const maxFitScale = (vw - 12) / Math.max(1, naturalW);
+      return Math.max(0.5, Math.min(baseScale, maxFitScale));
+    }
+
+    function clampPadPosition(pad) {
+      if (!pad || pad.style.display === 'none') return;
+      const scale = getPadScale(pad);
+      const naturalW = pad.offsetWidth || pad.scrollWidth || 200;
+      const naturalH = pad.offsetHeight || pad.scrollHeight || 150;
+      const visW = naturalW * scale;
+      const visH = naturalH * scale;
+      const vw = window.innerWidth || document.documentElement.clientWidth || 360;
+      const vh = window.innerHeight || document.documentElement.clientHeight || 640;
+
+      let left = parseFloat(pad.style.left);
+      let top = parseFloat(pad.style.top);
+      if (isNaN(left) || isNaN(top)) {
+        pad.style.transformOrigin = 'bottom right';
+        pad.style.transform = scale < 0.999 ? 'scale(' + scale.toFixed(4) + ')' : 'none';
+        return;
+      }
+
+      pad.style.transformOrigin = 'top left';
+      pad.style.transform = scale < 0.999 ? 'scale(' + scale.toFixed(4) + ')' : 'none';
+
+      const maxX = Math.max(4, vw - visW - 4);
+      const maxY = Math.max(4, vh - visH - 4);
+
+      left = Math.max(4, Math.min(maxX, left));
+      top = Math.max(4, Math.min(maxY, top));
+
+      pad.style.left = left + 'px';
+      pad.style.top = top + 'px';
+      pad.style.right = 'auto';
+      pad.style.bottom = 'auto';
+    }
+
     function toggleArrowsPanel(force) {
       const pad = document.getElementById('arrowsFloatingPad');
       const btn = document.getElementById('btnArrowsToggle');
@@ -2070,13 +2180,7 @@
       if (btn) btn.classList.toggle('active-mode', show);
       if (show) {
         requestAnimationFrame(() => {
-          const rect = pad.getBoundingClientRect();
-          if (rect.right > window.innerWidth || rect.bottom > window.innerHeight) {
-            pad.style.right = '20px';
-            pad.style.bottom = '20px';
-            pad.style.left = 'auto';
-            pad.style.top = 'auto';
-          }
+          clampPadPosition(pad);
         });
       }
     }
@@ -2131,7 +2235,8 @@
       const willOpen = (typeof force === 'boolean') ? force : !fnPanelActive;
       if (willOpen === fnPanelActive) return;
 
-      const prevRect = pad.getBoundingClientRect();
+      const hadLeft = !isNaN(parseFloat(pad.style.left)) && !isNaN(parseFloat(pad.style.top));
+      const prevRect = hadLeft ? pad.getBoundingClientRect() : null;
 
       fnPanelActive = willOpen;
       side.style.display = fnPanelActive ? 'grid' : 'none';
@@ -2142,29 +2247,13 @@
       setStatus(fnPanelActive ? 'EXTENDED KEYPAD OPEN' : 'EXTENDED KEYPAD CLOSED', 'var(--text)');
       try { if (navigator.vibrate) navigator.vibrate(10); } catch (_) {}
 
-      // Keep right edge pinned when expanding left
       requestAnimationFrame(() => {
-        const newRect = pad.getBoundingClientRect();
-        if (pad.style.left && pad.style.left !== 'auto') {
-          const widthDiff = newRect.width - prevRect.width;
-          let newLeft = prevRect.left - widthDiff;
-          if (newLeft < 4) newLeft = 4;
-          pad.style.left = newLeft + 'px';
-        } else {
-          if (newRect.left < 4) {
-            pad.style.right = 'auto';
-            pad.style.left = '4px';
-          }
+        if (hadLeft && prevRect) {
+          const newScale = getPadScale(pad);
+          const newVisW = (pad.offsetWidth || 200) * newScale;
+          pad.style.left = (prevRect.right - newVisW) + 'px';
         }
-
-        if (newRect.bottom > window.innerHeight) {
-          const overflow = newRect.bottom - window.innerHeight + 10;
-          if (pad.style.top && pad.style.top !== 'auto') {
-            pad.style.top = Math.max(10, newRect.top - overflow) + 'px';
-          } else {
-            pad.style.bottom = '10px';
-          }
-        }
+        clampPadPosition(pad);
       });
     }
 
@@ -2215,7 +2304,7 @@
 
     function pressPadKey(key) {
       try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
-      try { if (document.activeElement && document.activeElement.classList.contains('pad-key')) document.activeElement.blur(); } catch (_) {}
+      try { document.activeElement.blur(); } catch (_) {}
 
       if (key === 'fn') {
         toggleFnPanel();
@@ -2277,6 +2366,18 @@
           seq = mod ? `\x1b[1;${mod}${code}` : `\x1b[${code}`;
           break;
         }
+        case 'home':
+          seq = '\x1b[H';
+          break;
+        case 'end':
+          seq = '\x1b[F';
+          break;
+        case 'space':
+          seq = ' ';
+          break;
+        case 'slash':
+          seq = '/';
+          break;
         case 'enter':
           if (isAlt && isCtrl) {
             seq = '\x1b\n';
@@ -2311,10 +2412,10 @@
           seq = mod ? `\x1b[6;${mod}~` : '\x1b[6~';
           break;
         case 'clear':
-          seq = '\x0c'; // Ctrl+L clears terminal screen
+          seq = '\x0c';
           break;
         case 'delall':
-          seq = '\x01\x0b'; // Ctrl+A (beginning of line) then Ctrl+K (kill line to end)
+          seq = '\x01\x0b';
           break;
         case 'f1':
         case 'f2':
@@ -2348,13 +2449,20 @@
           backspace: 'BACKSPACE',
           tab: isShift ? 'BACKTAB' : 'TAB',
           pgup: 'PAGE UP',
-          pgdown: 'PAGE DOWN'
+          pgdown: 'PAGE DOWN',
+          home: 'HOME',
+          end: 'END',
+          space: 'SPACE',
+          slash: 'SLASH'
         };
         setStatus((labelMap[key] || key.toUpperCase()) + ' SENT', 'var(--text)');
       }
     }
 
-    function termScroll(dir) {
+    function termScroll(dir, ev) {
+      if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+      try { document.activeElement.blur(); } catch (_) {}
+
       if (selectMode) {
         const pan = document.getElementById('selectModePanel');
         if (!pan) return;
@@ -2421,6 +2529,13 @@
         isDragging = true;
         try { handle.setPointerCapture(e.pointerId); } catch (_) {}
         const rect = pad.getBoundingClientRect();
+        const scale = getPadScale(pad);
+        pad.style.transformOrigin = 'top left';
+        pad.style.transform = scale < 0.999 ? 'scale(' + scale.toFixed(4) + ')' : 'none';
+        pad.style.left = rect.left + 'px';
+        pad.style.top = rect.top + 'px';
+        pad.style.right = 'auto';
+        pad.style.bottom = 'auto';
         startX = e.clientX;
         startY = e.clientY;
         origX = rect.left;
@@ -2434,9 +2549,11 @@
         const dy = e.clientY - startY;
         let nx = origX + dx;
         let ny = origY + dy;
-        const padRect = pad.getBoundingClientRect();
-        const maxX = window.innerWidth - padRect.width - 4;
-        const maxY = window.innerHeight - padRect.height - 4;
+        const scale = getPadScale(pad);
+        const visW = (pad.offsetWidth || 200) * scale;
+        const visH = (pad.offsetHeight || 150) * scale;
+        const maxX = Math.max(4, window.innerWidth - visW - 4);
+        const maxY = Math.max(4, window.innerHeight - visH - 4);
         nx = Math.max(4, Math.min(maxX, nx));
         ny = Math.max(4, Math.min(maxY, ny));
         pad.style.left = nx + 'px';
@@ -2449,6 +2566,7 @@
         if (isDragging) {
           isDragging = false;
           try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+          clampPadPosition(pad);
           try {
             localStorage.setItem('colab_arrows_pos', JSON.stringify({
               left: pad.style.left, top: pad.style.top
@@ -2459,13 +2577,18 @@
       handle.addEventListener('pointerup', stopDrag);
       handle.addEventListener('pointercancel', stopDrag);
 
+      window.addEventListener('resize', () => {
+        if (pad.style.display !== 'none') clampPadPosition(pad);
+      });
       try {
         const saved = JSON.parse(localStorage.getItem('colab_arrows_pos') || 'null');
         if (saved && saved.left && saved.top) {
+          pad.style.transformOrigin = 'top left';
           pad.style.left = saved.left;
           pad.style.top = saved.top;
           pad.style.right = 'auto';
           pad.style.bottom = 'auto';
+          requestAnimationFrame(() => clampPadPosition(pad));
         }
       } catch (_) {}
     }
@@ -3887,27 +4010,37 @@
       const fontSelect = document.getElementById('uiFontFamily');
       const fontSize = document.getElementById('uiFontSize');
       const fontSizeValue = document.getElementById('uiFontSizeValue');
+      const headerFontSize = document.getElementById('uiHeaderFontSize');
+      const headerFontSizeValue = document.getElementById('uiHeaderFontSizeValue');
       const buttonScale = document.getElementById('uiButtonScale');
       const buttonScaleValue = document.getElementById('uiButtonScaleValue');
-      const defaults = { font: 'mono', fontSize: '13', buttonScale: '1' };
+      const defaults = { font: 'mono', fontSize: '13', headerFontSize: '13', buttonScale: '1' };
 
       function applySettings(settings) {
         const font = FONT_FAMILIES[settings.font] ? settings.font : defaults.font;
-        const size = Math.min(18, Math.max(8, Number(settings.fontSize) || 13));
-        const scale = Math.min(1.5, Math.max(0.4, Number(settings.buttonScale) || 1));
+        const size = Math.min(22, Math.max(8, Number(settings.fontSize) || 13));
+        const headerSize = Math.min(22, Math.max(8, Number(settings.headerFontSize) || 13));
+        const scale = Math.min(1.5, Math.max(0.3, Number(settings.buttonScale) || 1));
 
         if (fontSelect) fontSelect.value = font;
         if (fontSize) fontSize.value = String(size);
+        if (headerFontSize) headerFontSize.value = String(headerSize);
         if (buttonScale) buttonScale.value = String(scale);
 
         root.style.setProperty('--ui-font-family', FONT_FAMILIES[font]);
         root.style.setProperty('--ui-font-size', size + 'px');
+        root.style.setProperty('--ui-header-font-size', headerSize + 'px');
         root.style.setProperty('--ui-button-scale', String(scale));
 
         if (fontSizeValue) fontSizeValue.textContent = String(size);
+        if (headerFontSizeValue) headerFontSizeValue.textContent = String(headerSize);
         if (buttonScaleValue) buttonScaleValue.textContent = Math.round(scale * 100);
 
-        // Обновляем шрифт и размер напрямую в движке xterm.js
+        const pad = document.getElementById('arrowsFloatingPad');
+        if (pad && pad.style.display !== 'none' && typeof clampPadPosition === 'function') {
+          clampPadPosition(pad);
+        }
+
         if (term) {
           try {
             term.options.fontSize = size;
@@ -3934,6 +4067,7 @@
         const settings = {
           font: fontSelect ? fontSelect.value : defaults.font,
           fontSize: fontSize ? fontSize.value : defaults.fontSize,
+          headerFontSize: headerFontSize ? headerFontSize.value : defaults.headerFontSize,
           buttonScale: buttonScale ? buttonScale.value : defaults.buttonScale
         };
         applySettings(settings);
@@ -3946,6 +4080,7 @@
 
       if (fontSelect) fontSelect.addEventListener('change', saveSettings);
       if (fontSize) fontSize.addEventListener('input', saveSettings);
+      if (headerFontSize) headerFontSize.addEventListener('input', saveSettings);
       if (buttonScale) buttonScale.addEventListener('input', saveSettings);
       const resetBtn = document.getElementById('uiSettingsReset');
       if (resetBtn) {
