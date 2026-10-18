@@ -4370,7 +4370,10 @@
       log.textContent = 'Uploading ' + file.name + ' → ' + currentPath + ' …';
       try {
         const fd = new FormData();
-        fd.append('file', file);
+        // Some Android WebViews hand the picker a File with an empty name (content:// provider
+        // without DISPLAY_NAME). Such a part is sent as `filename=""` / without a filename and
+        // servers commonly reject it — pass a fallback name so the upload always carries one.
+        fd.append('file', file, file.name || ('upload_' + Date.now().toString(36) + '.bin'));
         fd.append('path', currentPath);
         if (activeSession) fd.append('session', activeSession);
 
