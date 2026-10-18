@@ -818,141 +818,223 @@ function generatedUploadName(mimetype) {
   return 'upload_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6) + ext;
 }
 
-/** Fills req.body and req.file from a multipart/form-data request (drop-in for multer.single('file')). */
-function multipartUpload(req, res, next) {
+/** Fills req.body and req.file from multipart, raw octet-stream, or base64 uploads. */
+function unifiedUpload(req, res, next) {
   const ctype = String(req.headers['content-type'] || '').toLowerCase();
-  if (!ctype.startsWith('multipart/form-data')) return next(); // not a multipart request
-
-  let bb;
-  try {
-    bb = Busboy({
-      headers: req.headers,
-      // Browsers put the raw UTF-8 bytes of the filename into Content-Disposition; the busboy
-      // default ('latin1') turned non-ASCII names into mojibake on the Colab side.
-      defParamCharset: 'utf8',
-      limits: { fileSize: MAX_UPLOAD_BYTES, files: 4, fields: 64, fieldSize: MAX_FIELD_BYTES }
-    });
-  } catch (err) {
-    return next(err);
-  }
-
-  req.body = Object.create(null);
-  const parts = [];           // stored file parts, in arrival order
-  const tmpPaths = new Set(); // every temp file of this request (cleanup on failure)
-  const writing = new Set();  // in-flight fs.WriteStreams
-  let fieldFile = null;       // bytes that arrived as a form field named "file"
-  let readDone = false;
-  let failed = false;
-
-  const cleanup = () => {
-    for (const p of tmpPaths) { try { fs.unlinkSync(p); } catch (e) {} }
-    tmpPaths.clear();
-  };
-  const fail = (status, message) => {
-    if (failed) return;
-    failed = true;
-    if (!res.headersSent) res.status(status).json({ error: message });
-    cleanup();
-  };
   const nextTmpPath = () => {
     const p = path.join(uploadDir, 'up_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10));
-    tmpPaths.add(p);
     return p;
   };
 
-  const finish = () => {
-    if (failed || !readDone || writing.size) return;
+  // 1. Raw octet-stream / direct binary upload (ideal for Android WebView without multipart quirks)
+  const isBinaryStream = ctype.startsWith('application/octet-stream') ||
+                         ctype.startsWith('application/binary') ||
+                         Boolean(req.query.name || req.query.filename || req.headers['x-file-name']);
 
-    let file = parts.find((p) => p.fieldname === 'file') || parts[0] || null;
+  if (isBinaryStream && !ctype.startsWith('multipart/form-data') && !ctype.startsWith('application/json')) {
+    const p = nextTmpPath();
+    const out = fs.createWriteStream(p);
+    let size = 0;
+    let failed = false;
 
-    if (!file && fieldFile) {
-      // The part carried neither a filename nor its own Content-Type, so busboy treated it as
-      // text. Bytes survive only when the payload is plain ASCII (anything else is already
-      // mangled by the UTF-8 decode) — fail loudly instead of storing corrupted data.
-      if (/[^\x00-\x7F]/.test(fieldFile.text)) {
-        return fail(400, 'file part had no filename and no Content-Type; non-ASCII bytes would be corrupted — re-select the file or update the client');
+    const rawName = req.query.name || req.query.filename || req.headers['x-file-name'] || '';
+    let decodedName = rawName;
+    try { decodedName = decodeURIComponent(rawName); } catch (_) {}
+    const originalname = cleanUploadName(decodedName) || generatedUploadName(ctype);
+
+    req.body = req.body || Object.create(null);
+    if (req.query.path) req.body.path = req.query.path;
+    if (req.headers['x-file-path']) {
+      try { req.body.path = decodeURIComponent(req.headers['x-file-path']); } catch (_) { req.body.path = req.headers['x-file-path']; }
+    }
+    if (req.query.session) req.body.session = req.query.session;
+    if (req.headers['x-session']) req.body.session = req.headers['x-session'];
+
+    req.on('data', (d) => {
+      size += d.length;
+      if (size > MAX_UPLOAD_BYTES && !failed) {
+        failed = true;
+        try { req.unpipe(out); } catch (_) {}
+        try { fs.unlinkSync(p); } catch (_) {}
+        return res.status(413).json({ error: 'file exceeds the ' + MAX_UPLOAD_MB + ' MB limit' });
       }
-      const p = nextTmpPath();
-      try { fs.writeFileSync(p, Buffer.from(fieldFile.text, 'ascii')); }
-      catch (err) { return fail(500, 'cannot store upload: ' + err.message); }
-      file = { fieldname: 'file', originalname: null, path: p, size: Buffer.byteLength(fieldFile.text, 'ascii'), mimetype: fieldFile.mimetype };
-      parts.push(file);
-    }
-
-    for (const p of parts) { // one upload per request — drop anything else
-      if (p !== file) { try { fs.unlinkSync(p.path); } catch (e) {} tmpPaths.delete(p.path); }
-    }
-
-    if (file) {
-      file.originalname = cleanUploadName(file.originalname) ||
-        cleanUploadName(req.body.filename) || cleanUploadName(req.body.file_name) ||
-        generatedUploadName(file.mimetype);
-      req.file = {
-        fieldname: file.fieldname,
-        originalname: file.originalname,
-        path: file.path,
-        size: file.size,
-        mimetype: file.mimetype
-      };
-      console.log('[UPLOAD] ' + file.originalname + ' (' + file.size + ' B) part="' + file.fieldname + '"');
-    }
-    next();
-  };
-
-  bb.on('field', (name, value, info) => {
-    if (failed) return;
-    if (info && info.nameTruncated) return fail(400, 'multipart field name too long');
-    if (name === 'file' || name === 'files' || name === 'upload') {
-      if (info && info.valueTruncated) return fail(413, 'file is too large for a filename-less part (limit ' + MAX_UPLOAD_MB + ' MB)');
-      if (!fieldFile) fieldFile = { text: String(value), mimetype: (info && info.mimeType) || 'application/octet-stream' };
-      return; // never expose raw file bytes through req.body
-    }
-    req.body[name] = value;
-  });
-
-  bb.on('file', (fieldname, stream, info) => {
-    if (failed) { stream.resume(); return; }
-    const dest = nextTmpPath();
-    const part = {
-      fieldname,
-      originalname: info && info.filename ? info.filename : null, // '' or missing is accepted here
-      mimetype: (info && info.mimeType) || 'application/octet-stream',
-      path: dest,
-      size: 0
-    };
-    const out = fs.createWriteStream(dest);
-    let stored = true;
-    writing.add(out);
-    stream.on('data', (d) => { part.size += d.length; });
-    stream.on('limit', () => fail(413, 'file exceeds the ' + MAX_UPLOAD_MB + ' MB limit'));
-    stream.on('error', (err) => fail(400, 'upload stream error: ' + err.message));
+    });
     out.on('error', (err) => {
-      stored = false;
-      try { stream.unpipe(out); } catch (e) {}
-      stream.resume();
-      fail(500, 'cannot store upload: ' + err.message);
+      if (!failed) {
+        failed = true;
+        try { fs.unlinkSync(p); } catch (_) {}
+        return res.status(500).json({ error: 'cannot store upload: ' + err.message });
+      }
     });
-    out.on('close', () => {
-      writing.delete(out);
-      if (stored && !failed) parts.push(part);
-      finish();
+    out.on('finish', () => {
+      if (failed) return;
+      req.file = {
+        fieldname: 'file',
+        originalname,
+        path: p,
+        size,
+        mimetype: ctype || 'application/octet-stream'
+      };
+      console.log('[UPLOAD OCTET-STREAM] ' + originalname + ' (' + size + ' B)');
+      next();
     });
-    stream.pipe(out);
-  });
+    req.pipe(out);
+    return;
+  }
 
-  bb.on('error', (err) => fail(400, 'multipart parse error: ' + err.message));
-  bb.on('partsLimit', () => fail(400, 'too many multipart parts'));
-  bb.on('filesLimit', () => fail(400, 'too many files in one request'));
-  bb.on('fieldsLimit', () => fail(400, 'too many multipart fields'));
-  bb.on('close', () => { readDone = true; finish(); });
-  req.on('aborted', () => { failed = true; cleanup(); });
-  req.pipe(bb);
+  // 2. Multipart form-data upload
+  if (ctype.startsWith('multipart/form-data')) {
+    let bb;
+    try {
+      bb = Busboy({
+        headers: req.headers,
+        defParamCharset: 'utf8',
+        limits: { fileSize: MAX_UPLOAD_BYTES, files: 4, fields: 64, fieldSize: MAX_FIELD_BYTES }
+      });
+    } catch (err) {
+      return next(err);
+    }
+
+    req.body = req.body || Object.create(null);
+    const parts = [];           // stored file parts, in arrival order
+    const tmpPaths = new Set(); // every temp file of this request (cleanup on failure)
+    const writing = new Set();  // in-flight fs.WriteStreams
+    let fieldFile = null;       // bytes that arrived as a form field named "file"
+    let readDone = false;
+    let failed = false;
+
+    const cleanup = () => {
+      for (const p of tmpPaths) { try { fs.unlinkSync(p); } catch (e) {} }
+      tmpPaths.clear();
+    };
+    const fail = (status, message) => {
+      if (failed) return;
+      failed = true;
+      if (!res.headersSent) res.status(status).json({ error: message });
+      cleanup();
+    };
+    const getDest = () => {
+      const p = nextTmpPath();
+      tmpPaths.add(p);
+      return p;
+    };
+
+    const finish = () => {
+      if (failed || !readDone || writing.size) return;
+
+      let file = parts.find((p) => p.fieldname === 'file') || parts[0] || null;
+
+      if (!file && fieldFile) {
+        const p = getDest();
+        try { fs.writeFileSync(p, Buffer.from(fieldFile.text, 'binary')); }
+        catch (err) { return fail(500, 'cannot store upload: ' + err.message); }
+        file = { fieldname: 'file', originalname: null, path: p, size: Buffer.byteLength(fieldFile.text, 'binary'), mimetype: fieldFile.mimetype };
+        parts.push(file);
+      }
+
+      for (const p of parts) { // one upload per request — drop anything else
+        if (p !== file) { try { fs.unlinkSync(p.path); } catch (e) {} tmpPaths.delete(p.path); }
+      }
+
+      if (file) {
+        file.originalname = cleanUploadName(file.originalname) ||
+          cleanUploadName(req.body.filename) || cleanUploadName(req.body.file_name) ||
+          cleanUploadName(req.query.name) || cleanUploadName(req.query.filename) ||
+          generatedUploadName(file.mimetype);
+        req.file = {
+          fieldname: file.fieldname,
+          originalname: file.originalname,
+          path: file.path,
+          size: file.size,
+          mimetype: file.mimetype
+        };
+        console.log('[UPLOAD MULTIPART] ' + file.originalname + ' (' + file.size + ' B) part="' + file.fieldname + '"');
+      }
+      next();
+    };
+
+    bb.on('field', (name, value, info) => {
+      if (failed) return;
+      if (info && info.nameTruncated) return fail(400, 'multipart field name too long');
+      if (name === 'file' || name === 'files' || name === 'upload') {
+        if (info && info.valueTruncated) return fail(413, 'file is too large for a filename-less part (limit ' + MAX_UPLOAD_MB + ' MB)');
+        if (!fieldFile) fieldFile = { text: String(value), mimetype: (info && info.mimeType) || 'application/octet-stream' };
+        return; // never expose raw file bytes through req.body
+      }
+      req.body[name] = value;
+    });
+
+    bb.on('file', (fieldname, stream, info) => {
+      if (failed) { stream.resume(); return; }
+      const dest = getDest();
+      const part = {
+        fieldname,
+        originalname: info && info.filename ? info.filename : null, // '' or missing is accepted here
+        mimetype: (info && info.mimeType) || 'application/octet-stream',
+        path: dest,
+        size: 0
+      };
+      const out = fs.createWriteStream(dest);
+      let stored = true;
+      writing.add(out);
+      stream.on('data', (d) => { part.size += d.length; });
+      stream.on('limit', () => fail(413, 'file exceeds the ' + MAX_UPLOAD_MB + ' MB limit'));
+      stream.on('error', (err) => fail(400, 'upload stream error: ' + err.message));
+      out.on('error', (err) => {
+        stored = false;
+        try { stream.unpipe(out); } catch (e) {}
+        stream.resume();
+        fail(500, 'cannot store upload: ' + err.message);
+      });
+      out.on('finish', () => {
+        writing.delete(out);
+        if (stored && !failed) parts.push(part);
+        finish();
+      });
+      stream.pipe(out);
+    });
+
+    bb.on('error', (err) => fail(400, 'multipart parse error: ' + err.message));
+    bb.on('partsLimit', () => fail(400, 'too many multipart parts'));
+    bb.on('filesLimit', () => fail(400, 'too many files in one request'));
+    bb.on('fieldsLimit', () => fail(400, 'too many multipart fields'));
+    bb.on('close', () => { readDone = true; finish(); });
+    req.on('aborted', () => { failed = true; cleanup(); });
+    req.pipe(bb);
+    return;
+  }
+
+  // 3. JSON base64 upload
+  if (req.body && (req.body.contentBase64 || req.body.base64)) {
+    try {
+      const b64 = req.body.contentBase64 || req.body.base64;
+      const buf = Buffer.from(b64, 'base64');
+      const p = nextTmpPath();
+      fs.writeFileSync(p, buf);
+      const originalname = cleanUploadName(req.body.name || req.body.filename) || generatedUploadName('application/octet-stream');
+      req.file = {
+        fieldname: 'file',
+        originalname,
+        path: p,
+        size: buf.length,
+        mimetype: 'application/octet-stream'
+      };
+      return next();
+    } catch (err) {
+      return res.status(400).json({ error: 'invalid base64 content: ' + err.message });
+    }
+  }
+
+  next();
 }
 
-app.post('/api/files/upload', checkApiKey, multipartUpload, async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'file required' });
-  const session = req.body.session;
-  let destDir = (req.body.path || '/content').replace(/\/$/, '');
+app.post('/api/files/upload', checkApiKey, unifiedUpload, async (req, res) => {
+  if (!req.file) {
+    console.error('[UPLOAD FAIL] No file received. Content-Type:', req.headers['content-type'], 'Query:', req.query, 'Body keys:', Object.keys(req.body || {}));
+    return res.status(400).json({ error: 'file required: no file data received (Content-Type was: ' + (req.headers['content-type'] || 'empty') + ')' });
+  }
+  const session = req.body.session || req.query.session;
+  let destDir = (req.body.path || req.query.path || '/content').replace(/\/$/, '');
   if (destDir.includes('..')) {
     try { fs.unlinkSync(req.file.path); } catch (e) {}
     return res.status(400).json({ error: 'invalid path' });
