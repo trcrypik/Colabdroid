@@ -62,7 +62,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-const upload = multer({ dest: '/tmp/colab_uploads/' });
+const uploadDir = path.join(os.tmpdir(), 'colab_uploads');
+try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (e) {}
+const upload = multer({ dest: uploadDir });
 
 // In-flight interactive Drive mounts (waiting for browser OAuth + user confirm)
 const driveMountJobs = new Map();
@@ -788,14 +790,207 @@ app.post('/api/files/upload', checkApiKey, upload.single('file'), async (req, re
   if (!req.file) return res.status(400).json({ error: 'file required' });
   const session = req.body.session;
   let destDir = (req.body.path || '/content').replace(/\/$/, '');
-  if (destDir.includes('..')) return res.status(400).json({ error: 'invalid path' });
+  if (destDir.includes('..')) {
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
+    return res.status(400).json({ error: 'invalid path' });
+  }
   const remotePath = destDir + '/' + path.basename(req.file.originalname);
   const args = ['upload'];
   if (session) args.push('-s', session);
   args.push(req.file.path, remotePath);
-  const result = await runCommand('colab', args, null, 300000);
+  let result = await runCommand('colab', args, null, 300000);
+
+  // If colab upload CLI failed, fallback to python exec chunked / base64 upload
+  if (!result.success && fs.existsSync(req.file.path)) {
+    try {
+      const fileData = fs.readFileSync(req.file.path);
+      const b64 = fileData.toString('base64');
+      const py = [
+        'import os, base64',
+        'p = ' + JSON.stringify(remotePath),
+        'parent = os.path.dirname(p)',
+        'if parent and not os.path.exists(parent):',
+        '    os.makedirs(parent, exist_ok=True)',
+        'with open(p, "wb") as f:',
+        '    f.write(base64.b64decode(' + JSON.stringify(b64) + '))',
+        'print("[colab-backend] python upload fallback ok")'
+      ].join('\n');
+      const fallbackArgs = ['exec'];
+      if (session) fallbackArgs.push('-s', session);
+      const fallbackRes = await runCommand('colab', fallbackArgs, py, 60000);
+      if (fallbackRes.success) {
+        result = fallbackRes;
+      }
+    } catch (fbErr) {
+      console.error('[UPLOAD FALLBACK ERROR]', fbErr);
+    }
+  }
+
   try { fs.unlinkSync(req.file.path); } catch (e) {}
   res.json({ success: result.success, remotePath, output: result.stdout || result.stderr });
+});
+
+app.post('/api/files/delete', checkApiKey, async (req, res) => {
+  const session = req.body.session;
+  const targetPath = req.body.path;
+  if (!targetPath) return res.status(400).json({ error: 'path required' });
+  if (targetPath.includes('..')) return res.status(400).json({ error: 'invalid path' });
+
+  const delPy = [
+    'import os, shutil, json',
+    'p = ' + JSON.stringify(targetPath),
+    'try:',
+    '    if not os.path.exists(p) and not os.path.islink(p):',
+    '        print(json.dumps({"ok": False, "error": "Path not found"}))',
+    '    else:',
+    '        if os.path.isdir(p) and not os.path.islink(p):',
+    '            shutil.rmtree(p)',
+    '        else:',
+    '            os.remove(p)',
+    '        print(json.dumps({"ok": True}))',
+    'except Exception as e:',
+    '    print(json.dumps({"ok": False, "error": str(e)}))'
+  ].join('\n');
+
+  const args = ['exec'];
+  if (session) args.push('-s', session);
+  const result = await runCommand('colab', args, delPy, 30000);
+  const raw = (result.stdout || result.stderr || '').trim();
+  let parsed = null;
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try { parsed = JSON.parse(lines[i]); break; } catch (e) {}
+  }
+  if (parsed) {
+    return res.json({ success: !!parsed.ok, error: parsed.error, raw });
+  }
+  res.json({ success: result.success, output: raw });
+});
+
+app.post('/api/files/rename', checkApiKey, async (req, res) => {
+  const session = req.body.session;
+  const oldPath = req.body.oldPath || req.body.src;
+  const newPath = req.body.newPath || req.body.dst;
+  if (!oldPath || !newPath) return res.status(400).json({ error: 'oldPath and newPath required' });
+  if (oldPath.includes('..') || newPath.includes('..')) return res.status(400).json({ error: 'invalid path' });
+
+  const renPy = [
+    'import os, shutil, json',
+    'src = ' + JSON.stringify(oldPath),
+    'dst = ' + JSON.stringify(newPath),
+    'try:',
+    '    if not os.path.exists(src) and not os.path.islink(src):',
+    '        print(json.dumps({"ok": False, "error": "Source not found"}))',
+    '    else:',
+    '        parent = os.path.dirname(dst)',
+    '        if parent and not os.path.exists(parent):',
+    '            os.makedirs(parent, exist_ok=True)',
+    '        shutil.move(src, dst)',
+    '        print(json.dumps({"ok": True, "path": dst}))',
+    'except Exception as e:',
+    '    print(json.dumps({"ok": False, "error": str(e)}))'
+  ].join('\n');
+
+  const args = ['exec'];
+  if (session) args.push('-s', session);
+  const result = await runCommand('colab', args, renPy, 30000);
+  const raw = (result.stdout || result.stderr || '').trim();
+  let parsed = null;
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try { parsed = JSON.parse(lines[i]); break; } catch (e) {}
+  }
+  if (parsed) {
+    return res.json({ success: !!parsed.ok, path: parsed.path, error: parsed.error, raw });
+  }
+  res.json({ success: result.success, output: raw });
+});
+
+app.post('/api/files/move', checkApiKey, async (req, res) => {
+  const session = req.body.session;
+  const src = req.body.src || req.body.oldPath;
+  let dst = req.body.dst || req.body.newPath;
+  if (!src || !dst) return res.status(400).json({ error: 'src and dst required' });
+  if (src.includes('..') || dst.includes('..')) return res.status(400).json({ error: 'invalid path' });
+
+  const mvPy = [
+    'import os, shutil, json',
+    'src = ' + JSON.stringify(src),
+    'dst = ' + JSON.stringify(dst),
+    'try:',
+    '    if not os.path.exists(src) and not os.path.islink(src):',
+    '        print(json.dumps({"ok": False, "error": "Source not found"}))',
+    '    else:',
+    '        if os.path.isdir(dst):',
+    '            dst = os.path.join(dst, os.path.basename(src.rstrip("/"))) ',
+    '        else:',
+    '            parent = os.path.dirname(dst)',
+    '            if parent and not os.path.exists(parent):',
+    '                os.makedirs(parent, exist_ok=True)',
+    '        shutil.move(src, dst)',
+    '        print(json.dumps({"ok": True, "path": dst}))',
+    'except Exception as e:',
+    '    print(json.dumps({"ok": False, "error": str(e)}))'
+  ].join('\n');
+
+  const args = ['exec'];
+  if (session) args.push('-s', session);
+  const result = await runCommand('colab', args, mvPy, 30000);
+  const raw = (result.stdout || result.stderr || '').trim();
+  let parsed = null;
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try { parsed = JSON.parse(lines[i]); break; } catch (e) {}
+  }
+  if (parsed) {
+    return res.json({ success: !!parsed.ok, path: parsed.path, error: parsed.error, raw });
+  }
+  res.json({ success: result.success, output: raw });
+});
+
+app.post('/api/files/copy', checkApiKey, async (req, res) => {
+  const session = req.body.session;
+  const src = req.body.src;
+  let dst = req.body.dst;
+  if (!src || !dst) return res.status(400).json({ error: 'src and dst required' });
+  if (src.includes('..') || dst.includes('..')) return res.status(400).json({ error: 'invalid path' });
+
+  const cpPy = [
+    'import os, shutil, json',
+    'src = ' + JSON.stringify(src),
+    'dst = ' + JSON.stringify(dst),
+    'try:',
+    '    if not os.path.exists(src) and not os.path.islink(src):',
+    '        print(json.dumps({"ok": False, "error": "Source not found"}))',
+    '    else:',
+    '        if os.path.isdir(dst):',
+    '            dst = os.path.join(dst, os.path.basename(src.rstrip("/"))) ',
+    '        else:',
+    '            parent = os.path.dirname(dst)',
+    '            if parent and not os.path.exists(parent):',
+    '                os.makedirs(parent, exist_ok=True)',
+    '        if os.path.isdir(src) and not os.path.islink(src):',
+    '            shutil.copytree(src, dst)',
+    '        else:',
+    '            shutil.copy2(src, dst)',
+    '        print(json.dumps({"ok": True, "path": dst}))',
+    'except Exception as e:',
+    '    print(json.dumps({"ok": False, "error": str(e)}))'
+  ].join('\n');
+
+  const args = ['exec'];
+  if (session) args.push('-s', session);
+  const result = await runCommand('colab', args, cpPy, 60000);
+  const raw = (result.stdout || result.stderr || '').trim();
+  let parsed = null;
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try { parsed = JSON.parse(lines[i]); break; } catch (e) {}
+  }
+  if (parsed) {
+    return res.json({ success: !!parsed.ok, path: parsed.path, error: parsed.error, raw });
+  }
+  res.json({ success: result.success, output: raw });
 });
 
 
