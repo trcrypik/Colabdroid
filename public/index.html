@@ -105,6 +105,89 @@
       padding: 6px 12px; display: flex; justify-content: space-between; align-items: center;
       color: var(--cyan); font-size: calc(var(--ui-header-font-size) - 2px); gap: 8px;
     }
+    .terminal-header-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .term-fullscreen-btn {
+      background: transparent;
+      border: 1px solid rgba(0, 240, 255, 0.4);
+      color: var(--cyan);
+      border-radius: 3px;
+      cursor: pointer;
+      padding: 2px 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      transition: all 0.15s ease;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .term-fullscreen-btn:hover {
+      background: rgba(0, 240, 255, 0.2);
+      border-color: var(--cyan);
+      color: #ffffff;
+      box-shadow: 0 0 6px rgba(0, 240, 255, 0.35);
+    }
+    .term-fullscreen-btn.active-fullscreen {
+      background: rgba(0, 240, 255, 0.25);
+      border-color: var(--cyan);
+      color: #ffffff;
+    }
+    body.term-fullscreen {
+      overflow: hidden !important;
+    }
+    body.term-fullscreen header {
+      display: flex !important;
+      justify-content: flex-end !important;
+      align-items: center !important;
+      padding: 2px 10px !important;
+      height: 24px !important;
+      min-height: 24px !important;
+      background: #06090e !important;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.2) !important;
+    }
+    body.term-fullscreen header .brand,
+    body.term-fullscreen header .hdr-status {
+      display: none !important;
+    }
+    body.term-fullscreen header .sys-badge {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      font-size: 11px !important;
+    }
+    body.term-fullscreen nav,
+    body.term-fullscreen #authBanner,
+    body.term-fullscreen .term-toolbar,
+    body.term-fullscreen #selectModeBar {
+      display: none !important;
+    }
+    body.term-fullscreen main {
+      padding: 0 !important;
+      margin: 0 !important;
+      height: calc(100vh - 24px) !important;
+      max-height: calc(100vh - 24px) !important;
+      flex: 1 1 auto !important;
+    }
+    body.term-fullscreen #tab-terminal {
+      display: flex !important;
+      height: 100% !important;
+      padding: 0 !important;
+      gap: 0 !important;
+    }
+    body.term-fullscreen .terminal-container {
+      height: 100% !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
     .terminal-header-right {
       display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 0;
     }
@@ -1113,14 +1196,25 @@
       </div>
       <div class="terminal-container">
         <div class="terminal-header">
-          <span id="termHeaderTitle">SSH</span>
+          <div class="terminal-header-left">
+            <button class="term-fullscreen-btn" id="btnTermFullscreen" type="button" onclick="toggleTermFullscreen()" title="Fullscreen terminal (Esc to exit)" aria-label="Fullscreen terminal">
+              <svg class="term-fs-icon-enter" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              </svg>
+              <svg class="term-fs-icon-exit" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                <rect x="5" y="5" width="14" height="14" rx="1.5" ry="1.5"></rect>
+                <polyline points="9 9 9 15 15 15"></polyline>
+              </svg>
+            </button>
+            <span id="termHeaderTitle">SSH</span>
+          </div>
           <div class="terminal-header-right">
             <span id="termStatus">OFFLINE</span>
             <div class="term-scroll-nav" role="toolbar" aria-label="Terminal scroll navigation">
-              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault(); document.activeElement.blur();" onclick="termScroll('home', event)" title="Scroll to top (Home)">HOME</button>
-              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault(); document.activeElement.blur();" onclick="termScroll('pageup', event)" title="Scroll page up (Page Up)">↑</button>
-              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault(); document.activeElement.blur();" onclick="termScroll('pagedown', event)" title="Scroll page down (Page Down)">↓</button>
-              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault(); document.activeElement.blur();" onclick="termScroll('end', event)" title="Scroll to bottom (End)">END</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault();" onclick="termScroll('home', event)" title="Scroll to top (Home)">HOME</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault();" onclick="termScroll('pageup', event)" title="Scroll page up (Page Up)">↑</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault();" onclick="termScroll('pagedown', event)" title="Scroll page down (Page Down)">↓</button>
+              <button class="term-scroll-btn" type="button" onmousedown="event.preventDefault();" onclick="termScroll('end', event)" title="Scroll to bottom (End)">END</button>
             </div>
           </div>
         </div>
@@ -1153,13 +1247,13 @@
         <div class="grid">
           <div>
             <label class="stat-label">SESSION NAME</label>
-            <input type="text" id="newSessName" placeholder="t4-experiment" />
+            <input type="text" id="newSessName" placeholder="colab-session" />
           </div>
           <div>
             <label class="stat-label">ACCELERATOR</label>
             <select id="newSessGpu">
-              <option value="NONE">CPU</option>
-              <option value="GPU:T4" selected>GPU T4</option>
+              <option value="NONE" selected>CPU</option>
+              <option value="GPU:T4">GPU T4</option>
               <option value="GPU:L4">GPU L4</option>
               <option value="GPU:A100">GPU A100</option>
               <option value="GPU:H100">GPU H100</option>
@@ -1234,15 +1328,14 @@
           </div>
           <button class="btn" type="button" onclick="fmList()">[GO]</button>
           <button class="btn" type="button" onclick="fmList()">[REFRESH]</button>
-          <label class="btn btn-cyan" style="display:inline-block;cursor:pointer;">
-            [UPLOAD]
-            <input type="file" id="fmUploadInput" style="display:none;" onchange="fmUpload(event)" />
-          </label>
+          <button class="btn btn-cyan" type="button" onclick="fmNewFolder()" title="Create new directory in current path">[+ FOLDER]</button>
+          <button class="btn btn-cyan" type="button" onclick="document.getElementById('fmUploadInput').click()" title="Upload file to current directory">[UPLOAD]</button>
+          <input type="file" id="fmUploadInput" style="display:none;" onchange="fmUpload(event)" />
         </div>
         <div id="fmLog" class="log-box">Select a session first, then browse /content.</div>
         <div style="overflow-x:auto;">
           <table class="fm-table">
-            <thead><tr><th>NAME</th><th>SIZE</th><th>ACTIONS</th></tr></thead>
+            <thead><tr><th>NAME</th><th>SIZE</th><th style="min-width:230px;">ACTIONS</th></tr></thead>
             <tbody id="fmBody"></tbody>
           </table>
         </div>
@@ -1263,6 +1356,16 @@
           <button class="btn" type="button" onclick="testConnection()">[TEST_/health]</button>
         </div>
         <div id="cfgTestResult" class="hint"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">BACKUP & SETTINGS (IMPORT / EXPORT)</div>
+        <p class="hint">Export or import a complete backup file containing all your saved commands and scripts, API connection parameters, interface UI customization, and preferences.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-cyan" type="button" onclick="exportFullConfig()" title="Export all settings and saved commands to JSON file">[EXPORT_SETTINGS]</button>
+          <button class="btn btn-cyan" type="button" onclick="document.getElementById('cfgImportInput').click()" title="Import settings and commands from JSON file">[IMPORT_SETTINGS]</button>
+          <input type="file" id="cfgImportInput" accept=".json,application/json" style="display:none;" onchange="importFullConfig(event)" />
+        </div>
+        <div id="cfgBackupLog" class="hint" style="margin-top:6px;"></div>
       </div>
       <div class="card">
         <div class="card-title">SSH KEY (colab ssh)</div>
@@ -2116,14 +2219,18 @@
       setStatus('CLEARED', 'var(--text)');
     }
 
+    function blurIfButton() {
+      try {
+        const el = document.activeElement;
+        if (el && (el.classList.contains('pad-key') || el.classList.contains('term-scroll-btn'))) {
+          el.blur();
+        }
+      } catch (_) {}
+    }
+
     function sendPtyEnter() {
       if (termMode === 'pty' && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'stdin', data: '\r' }));
-        setTimeout(() => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'stdin', data: '\n' }));
-          }
-        }, 50);
         setStatus('ENTER SENT', 'var(--text)');
       } else {
         setStatus('PTY OFFLINE', 'var(--amber)');
@@ -2304,7 +2411,7 @@
 
     function pressPadKey(key) {
       try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
-      try { document.activeElement.blur(); } catch (_) {}
+      blurIfButton();
 
       if (key === 'fn') {
         toggleFnPanel();
@@ -2356,6 +2463,8 @@
       const isCtrl = virtualCtrlActive;
       const isAlt = virtualAltActive;
       const mod = getXtermMod(isShift, isAlt, isCtrl);
+      // Проверяем, включил ли mc / opencode режим Application Cursor Keys (DECCKM)
+      const appCursor = !!(term && term.modes && term.modes.applicationCursorKeysMode);
 
       switch (key) {
         case 'up':
@@ -2363,20 +2472,24 @@
         case 'right':
         case 'left': {
           const code = { up: 'A', down: 'B', right: 'C', left: 'D' }[key];
-          seq = mod ? `\x1b[1;${mod}${code}` : `\x1b[${code}`;
+          if (mod) {
+            seq = `\x1b[1;${mod}${code}`;
+          } else {
+            seq = appCursor ? `\x1bO${code}` : `\x1b[${code}`;
+          }
           break;
         }
         case 'home':
-          seq = '\x1b[H';
+          seq = mod ? `\x1b[1;${mod}H` : (appCursor ? '\x1bOH' : '\x1b[H');
           break;
         case 'end':
-          seq = '\x1b[F';
+          seq = mod ? `\x1b[1;${mod}F` : (appCursor ? '\x1bOF' : '\x1b[F');
           break;
         case 'space':
-          seq = ' ';
+          seq = isCtrl ? '\x00' : (isAlt ? '\x1b ' : ' ');
           break;
         case 'slash':
-          seq = '/';
+          seq = isAlt ? '\x1b/' : '/';
           break;
         case 'enter':
           if (isAlt && isCtrl) {
@@ -2391,8 +2504,7 @@
           }
           break;
         case 'esc':
-          if (isAlt) seq = '\x1b\x1b';
-          else seq = '\x1b';
+          seq = isAlt ? '\x1b\x1b' : '\x1b';
           break;
         case 'tab':
           if (isShift) seq = '\x1b[Z';
@@ -2461,7 +2573,7 @@
 
     function termScroll(dir, ev) {
       if (ev) { ev.preventDefault(); ev.stopPropagation(); }
-      try { document.activeElement.blur(); } catch (_) {}
+      blurIfButton();
 
       if (selectMode) {
         const pan = document.getElementById('selectModePanel');
@@ -2487,6 +2599,19 @@
 
       if (term) {
         try {
+          const isAltBuffer = !!(term.buffer && term.buffer.active && term.buffer.active.type === 'alternate');
+          const hasScrollback = !!(term.buffer && term.buffer.active && term.buffer.active.baseY > 0);
+
+          // Если запущено TUI-приложение (opencode, mc, vim, less) или нет локального скроллбэка —
+          // отправляем клавиши навигации в сам терминал
+          if (isAltBuffer || !hasScrollback) {
+            if (dir === 'home') pressPadKey('home');
+            else if (dir === 'end') pressPadKey('end');
+            else if (dir === 'pageup' || dir === 'up') pressPadKey('pgup');
+            else if (dir === 'pagedown' || dir === 'down') pressPadKey('pgdown');
+            return;
+          }
+
           if (dir === 'home') {
             if (typeof term.scrollToTop === 'function') term.scrollToTop();
             else if (typeof term.scrollLines === 'function') term.scrollLines(-100000);
@@ -2628,6 +2753,217 @@
       try {
         localStorage.setItem('colab_commands_templates', JSON.stringify(commandTemplates));
       } catch (_) {}
+    }
+
+    function exportFullConfig() {
+      let uiSettings = {};
+      try { uiSettings = JSON.parse(localStorage.getItem('colab_ui_settings') || '{}'); } catch (_) {}
+      let arrowsPos = null;
+      try { arrowsPos = JSON.parse(localStorage.getItem('colab_arrows_pos') || 'null'); } catch (_) {}
+      let commandsPos = null;
+      try { commandsPos = JSON.parse(localStorage.getItem('colab_commands_pos') || 'null'); } catch (_) {}
+
+      const fullConfig = {
+        version: 2,
+        app: 'Colabdroid',
+        exportedAt: new Date().toISOString(),
+        settings: {
+          api: {
+            baseUrl: localStorage.getItem('colab_api_base') || '',
+            apiKey: localStorage.getItem('colab_api_key') || ''
+          },
+          ui: uiSettings,
+          terminal: {
+            termMode: termMode || localStorage.getItem('colab_term_mode') || 'pty'
+          },
+          session: {
+            activeSession: activeSession || localStorage.getItem('colab_active_session') || ''
+          },
+          layout: {
+            arrowsPos: arrowsPos,
+            commandsPos: commandsPos
+          }
+        },
+        commands: commandTemplates || []
+      };
+
+      const jsonStr = JSON.stringify(fullConfig, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'colabdroid-settings-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      const log = document.getElementById('cfgBackupLog');
+      if (log) {
+        log.style.color = 'var(--text)';
+        log.textContent = '✓ Settings and ' + (commandTemplates || []).length + ' command(s) exported to file';
+      }
+      setStatus('SETTINGS EXPORTED', 'var(--cyan)');
+      showToast('✓ Settings & commands exported');
+    }
+
+    function exportCommandTemplates() {
+      exportFullConfig();
+    }
+
+    function importFullConfig(event) {
+      const input = event.target;
+      const file = input.files && input.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!data || typeof data !== 'object') {
+            throw new Error('Invalid JSON format.');
+          }
+
+          let restoredParts = [];
+
+          // 1. Settings
+          const settings = data.settings || {};
+
+          // API connection
+          const apiCfg = settings.api || (data.colab_api_base !== undefined ? { baseUrl: data.colab_api_base, apiKey: data.colab_api_key } : null);
+          if (apiCfg) {
+            if (typeof apiCfg.baseUrl === 'string') {
+              localStorage.setItem('colab_api_base', normalizeBaseUrl(apiCfg.baseUrl));
+            }
+            if (typeof apiCfg.apiKey === 'string') {
+              localStorage.setItem('colab_api_key', apiCfg.apiKey.trim());
+            }
+            loadConnectionCfgIntoForm();
+            restoredParts.push('API Connection');
+          }
+
+          // UI settings
+          const uiCfg = settings.ui || data.colab_ui_settings;
+          if (uiCfg && typeof uiCfg === 'object') {
+            try {
+              localStorage.setItem('colab_ui_settings', JSON.stringify(uiCfg));
+            } catch (_) {}
+            if (typeof window.applyUiSettings === 'function') {
+              window.applyUiSettings(uiCfg);
+            }
+            restoredParts.push('Interface UI');
+          }
+
+          // Terminal mode
+          const termCfg = settings.terminal || data.colab_term_mode;
+          const tMode = (termCfg && termCfg.termMode) || (typeof termCfg === 'string' ? termCfg : null);
+          if (tMode === 'pty' || tMode === 'exec') {
+            if (typeof setTermMode === 'function') {
+              setTermMode(tMode);
+            }
+            restoredParts.push('Terminal Mode (' + tMode.toUpperCase() + ')');
+          }
+
+          // Active session
+          const sessCfg = settings.session || data.colab_active_session;
+          const sName = (sessCfg && sessCfg.activeSession) || (typeof sessCfg === 'string' ? sessCfg : null);
+          if (typeof sName === 'string') {
+            activeSession = sName;
+            localStorage.setItem('colab_active_session', activeSession);
+            updateSessionLabel();
+            restoredParts.push('Active Session (' + (activeSession || 'DEFAULT') + ')');
+          }
+
+          // Keypad / Commands layout
+          const layoutCfg = settings.layout;
+          if (layoutCfg) {
+            if (layoutCfg.arrowsPos) {
+              localStorage.setItem('colab_arrows_pos', JSON.stringify(layoutCfg.arrowsPos));
+              const pad = document.getElementById('arrowsFloatingPad');
+              if (pad) {
+                Object.assign(pad.style, layoutCfg.arrowsPos);
+                if (typeof clampPadPosition === 'function') clampPadPosition(pad);
+              }
+            }
+            if (layoutCfg.commandsPos) {
+              localStorage.setItem('colab_commands_pos', JSON.stringify(layoutCfg.commandsPos));
+              const pad = document.getElementById('commandsFloatingPad');
+              if (pad) Object.assign(pad.style, layoutCfg.commandsPos);
+            }
+            restoredParts.push('Layout');
+          }
+
+          // 2. Commands templates (supports both full backup format and legacy commands-only format)
+          let rawCommands = null;
+          if (Array.isArray(data)) {
+            rawCommands = data;
+          } else if (Array.isArray(data.commands)) {
+            rawCommands = data.commands;
+          } else if (Array.isArray(data.colab_commands_templates)) {
+            rawCommands = data.colab_commands_templates;
+          }
+
+          if (rawCommands && rawCommands.length) {
+            const validItems = rawCommands.filter(item => item && typeof item.name === 'string' && (typeof item.command === 'string' || typeof item.code === 'string')).map(item => ({
+              id: item.id || ('tpl_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6)),
+              name: item.name.trim(),
+              command: (item.command || item.code || '').trim()
+            }));
+
+            if (validItems.length) {
+              const replace = confirm('Found ' + validItems.length + ' command(s) in backup.\n\nClick OK to REPLACE current commands.\nClick Cancel to MERGE (add to current).');
+              if (replace) {
+                commandTemplates = validItems;
+              } else {
+                const existingNames = new Set(commandTemplates.map(c => c.name.toLowerCase()));
+                validItems.forEach(item => {
+                  if (!existingNames.has(item.name.toLowerCase())) {
+                    commandTemplates.push(item);
+                    existingNames.add(item.name.toLowerCase());
+                  } else {
+                    commandTemplates.push({
+                      ...item,
+                      id: 'tpl_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+                      name: item.name + ' (import)'
+                    });
+                  }
+                });
+              }
+
+              saveCommandTemplates();
+              renderCommandTemplates();
+              restoredParts.push(validItems.length + ' Command(s)');
+            }
+          }
+
+          const summary = restoredParts.length ? ('Restored: ' + restoredParts.join(', ')) : 'Configuration imported';
+          const log = document.getElementById('cfgBackupLog');
+          if (log) {
+            log.style.color = 'var(--text)';
+            log.textContent = '✓ ' + summary;
+          }
+          setStatus('SETTINGS IMPORTED', 'var(--text)');
+          showToast('✓ ' + summary);
+        } catch (err) {
+          alert('Import failed: ' + err.message);
+          const log = document.getElementById('cfgBackupLog');
+          if (log) {
+            log.style.color = 'var(--red)';
+            log.textContent = 'Import error: ' + err.message;
+          }
+        } finally {
+          input.value = '';
+        }
+      };
+      reader.onerror = function() {
+        alert('Failed to read file.');
+        input.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    function importCommandTemplates(event) {
+      importFullConfig(event);
     }
 
     function renderCommandTemplates() {
@@ -3799,15 +4135,18 @@
           const nameHtml = '<div class="fm-name-wrap">' + nameSpan + copyBtn + '</div>';
           let actions = '';
           if (!isDir) {
-            actions = '<button class="btn" type="button" onclick="fmDownload(\'' + escAttr(ent.path) + '\')">[DL]</button> ';
+            actions += '<button class="btn" type="button" onclick="fmDownload(\'' + escAttr(ent.path) + '\')" title="Download file">[DL]</button> ';
+          } else {
+            actions += '<button class="btn" type="button" onclick="fmNavigate(\'' + escAttr(ent.path) + '\')" title="Open directory">[OPEN]</button> ';
           }
-          actions += isDir
-            ? '<button class="btn" type="button" onclick="fmNavigate(\'' + escAttr(ent.path) + '\')">[OPEN]</button>'
-            : '';
+          actions += '<button class="btn" type="button" onclick="fmRename(\'' + escAttr(ent.path) + '\',' + isDir + ')" title="Rename">[REN]</button> ';
+          actions += '<button class="btn" type="button" onclick="fmCopy(\'' + escAttr(ent.path) + '\',' + isDir + ')" title="Copy">[CP]</button> ';
+          actions += '<button class="btn" type="button" onclick="fmMove(\'' + escAttr(ent.path) + '\',' + isDir + ')" title="Move">[MV]</button> ';
+          actions += '<button class="btn btn-danger" type="button" onclick="fmDelete(\'' + escAttr(ent.path) + '\',' + isDir + ')" title="Delete">[DEL]</button>';
           tr.innerHTML =
             '<td>' + nameHtml + '</td>' +
             '<td>' + (isDir ? 'DIR' : fmtSize(ent.size)) + '</td>' +
-            '<td>' + actions + '</td>';
+            '<td style="white-space:nowrap;">' + actions + '</td>';
           tr.oncontextmenu = (ev) => copyFilePath(ev, ent.path, tr);
           body.appendChild(tr);
         });
@@ -3862,32 +4201,282 @@
       }
     }
     async function fmUpload(ev) {
-      const file = ev.target.files && ev.target.files[0];
-      ev.target.value = '';
+      const input = ev.target;
+      const file = input.files && input.files[0];
       if (!file) return;
+
+      const currentPath = (document.getElementById('fmPath').value || fmPath || '/content').trim() || '/content';
       const log = document.getElementById('fmLog');
-      if (!activeSession) {
-        log.className = 'log-box err';
-        log.textContent = 'Select a session first.';
-        return;
-      }
       log.className = 'log-box';
-      log.textContent = 'Uploading ' + file.name + ' → ' + fmPath + ' …';
+      log.textContent = 'Uploading ' + file.name + ' → ' + currentPath + ' …';
       try {
         const fd = new FormData();
         fd.append('file', file);
-        fd.append('path', fmPath);
-        fd.append('session', activeSession);
+        fd.append('path', currentPath);
+        if (activeSession) fd.append('session', activeSession);
+
         const r = await apiFetch('/api/files/upload', { method: 'POST', body: fd });
         const d = await r.json();
         log.className = 'log-box ' + (d.success ? 'ok' : 'err');
-        log.textContent = (d.success ? 'UPLOADED ' + d.remotePath : 'FAIL') + '\n' + (d.output || '');
-        if (d.success) fmList();
+        log.textContent = (d.success ? 'UPLOADED ' + (d.remotePath || file.name) : 'FAIL') + '\n' + (d.output || d.error || '');
+        if (d.success) {
+          showToast('✓ Uploaded ' + file.name);
+          fmList();
+        }
       } catch (e) {
         log.className = 'log-box err';
-        log.textContent = e.message;
+        log.textContent = 'Upload error: ' + e.message;
+      } finally {
+        input.value = '';
       }
     }
+
+    async function fmDelete(remotePath, isDir) {
+      const name = remotePath.split('/').pop() || remotePath;
+      const msg = 'Delete ' + (isDir ? 'directory and all its contents: ' : 'file: ') + name + '?';
+      if (!confirm(msg)) return;
+
+      const log = document.getElementById('fmLog');
+      log.className = 'log-box';
+      log.textContent = 'Deleting ' + remotePath + ' …';
+
+      try {
+        const r = await apiFetch('/api/files/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: activeSession, path: remotePath })
+        });
+        let d = null;
+        if (r.ok) {
+          d = await r.json();
+        } else if (r.status === 404) {
+          const py = 'import shutil, os; p = ' + JSON.stringify(remotePath) + '; (shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)) if (os.path.exists(p) or os.path.islink(p)) else None';
+          const fb = await apiFetch('/api/exec', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session: activeSession, code: py, isBash: false })
+          });
+          d = await fb.json();
+        }
+        if (d && (d.success || d.ok)) {
+          log.className = 'log-box ok';
+          log.textContent = 'DELETED: ' + remotePath;
+          showToast('✓ Deleted: ' + name);
+          fmList();
+        } else {
+          log.className = 'log-box err';
+          log.textContent = 'Delete failed: ' + (d && (d.error || d.output || d.stderr) || 'Unknown error');
+        }
+      } catch (e) {
+        log.className = 'log-box err';
+        log.textContent = 'Delete error: ' + e.message;
+      }
+    }
+
+    async function fmRename(remotePath, isDir) {
+      const oldName = remotePath.split('/').pop() || remotePath;
+      const newName = prompt('Rename ' + (isDir ? 'folder' : 'file') + ' to:', oldName);
+      if (!newName || newName.trim() === '' || newName.trim() === oldName) return;
+
+      const parent = parentPath(remotePath);
+      const newPath = (parent === '/' ? '' : parent) + '/' + newName.trim();
+      const log = document.getElementById('fmLog');
+      log.className = 'log-box';
+      log.textContent = 'Renaming ' + remotePath + ' → ' + newPath + ' …';
+
+      try {
+        const r = await apiFetch('/api/files/rename', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: activeSession, oldPath: remotePath, newPath: newPath })
+        });
+        let d = null;
+        if (r.ok) {
+          d = await r.json();
+        } else if (r.status === 404) {
+          const py = 'import shutil; shutil.move(' + JSON.stringify(remotePath) + ', ' + JSON.stringify(newPath) + ')';
+          const fb = await apiFetch('/api/exec', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session: activeSession, code: py, isBash: false })
+          });
+          d = await fb.json();
+        }
+        if (d && (d.success || d.ok)) {
+          log.className = 'log-box ok';
+          log.textContent = 'RENAMED: ' + oldName + ' → ' + newName.trim();
+          showToast('✓ Renamed to ' + newName.trim());
+          fmList();
+        } else {
+          log.className = 'log-box err';
+          log.textContent = 'Rename failed: ' + (d && (d.error || d.output || d.stderr) || 'Unknown error');
+        }
+      } catch (e) {
+        log.className = 'log-box err';
+        log.textContent = 'Rename error: ' + e.message;
+      }
+    }
+
+    async function fmCopy(remotePath, isDir) {
+      const name = remotePath.split('/').pop() || remotePath;
+      const parent = parentPath(remotePath);
+      const defaultDst = (parent === '/' ? '' : parent) + '/' + name + '_copy';
+      const target = prompt('Copy ' + (isDir ? 'folder ' : 'file ') + name + ' to (folder or new path):', defaultDst);
+      if (!target || !target.trim() || target.trim() === remotePath) return;
+
+      let dst = target.trim();
+      const log = document.getElementById('fmLog');
+      log.className = 'log-box';
+      log.textContent = 'Copying ' + remotePath + ' → ' + dst + ' …';
+
+      try {
+        const r = await apiFetch('/api/files/copy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: activeSession, src: remotePath, dst: dst })
+        });
+        let d = null;
+        if (r.ok) {
+          d = await r.json();
+        } else if (r.status === 404) {
+          const py = 'import shutil, os; src = ' + JSON.stringify(remotePath) + '; dst = ' + JSON.stringify(dst) + '; dst = os.path.join(dst, os.path.basename(src.rstrip("/"))) if os.path.isdir(dst) else dst; (shutil.copytree(src, dst) if os.path.isdir(src) and not os.path.islink(src) else shutil.copy2(src, dst))';
+          const fb = await apiFetch('/api/exec', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session: activeSession, code: py, isBash: false })
+          });
+          d = await fb.json();
+        }
+        if (d && (d.success || d.ok)) {
+          log.className = 'log-box ok';
+          log.textContent = 'COPIED: ' + name + ' → ' + (d.path || dst);
+          showToast('✓ Copied ' + name);
+          fmList();
+        } else {
+          log.className = 'log-box err';
+          log.textContent = 'Copy failed: ' + (d && (d.error || d.output || d.stderr) || 'Unknown error');
+        }
+      } catch (e) {
+        log.className = 'log-box err';
+        log.textContent = 'Copy error: ' + e.message;
+      }
+    }
+
+    async function fmMove(remotePath, isDir) {
+      const name = remotePath.split('/').pop() || remotePath;
+      const currentDir = (document.getElementById('fmPath').value || fmPath || '/content').trim() || '/content';
+      const target = prompt('Move ' + (isDir ? 'folder ' : 'file ') + name + ' to (folder or full path):', currentDir);
+      if (!target || !target.trim() || target.trim() === remotePath) return;
+
+      let dst = target.trim();
+      const log = document.getElementById('fmLog');
+      log.className = 'log-box';
+      log.textContent = 'Moving ' + remotePath + ' → ' + dst + ' …';
+
+      try {
+        const r = await apiFetch('/api/files/move', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: activeSession, src: remotePath, dst: dst })
+        });
+        let d = null;
+        if (r.ok) {
+          d = await r.json();
+        } else if (r.status === 404) {
+          const py = 'import shutil, os; src = ' + JSON.stringify(remotePath) + '; dst = ' + JSON.stringify(dst) + '; dst = os.path.join(dst, os.path.basename(src.rstrip("/"))) if os.path.isdir(dst) else dst; shutil.move(src, dst)';
+          const fb = await apiFetch('/api/exec', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session: activeSession, code: py, isBash: false })
+          });
+          d = await fb.json();
+        }
+        if (d && (d.success || d.ok)) {
+          log.className = 'log-box ok';
+          log.textContent = 'MOVED: ' + name + ' → ' + (d.path || dst);
+          showToast('✓ Moved ' + name);
+          fmList();
+        } else {
+          log.className = 'log-box err';
+          log.textContent = 'Move failed: ' + (d && (d.error || d.output || d.stderr) || 'Unknown error');
+        }
+      } catch (e) {
+        log.className = 'log-box err';
+        log.textContent = 'Move error: ' + e.message;
+      }
+    }
+
+    async function fmNewFolder() {
+      const currentDir = (document.getElementById('fmPath').value || fmPath || '/content').trim() || '/content';
+      const name = prompt('Create new folder in ' + currentDir + ':\nEnter folder name:', 'new_folder');
+      if (!name || !name.trim()) return;
+
+      const targetPath = (currentDir === '/' ? '' : currentDir) + '/' + name.trim();
+      const log = document.getElementById('fmLog');
+      log.className = 'log-box';
+      log.textContent = 'Creating folder ' + targetPath + ' …';
+
+      try {
+        const py = 'import os, json; p = ' + JSON.stringify(targetPath) + '; os.makedirs(p, exist_ok=True); print(json.dumps({"ok": True}))';
+        const r = await apiFetch('/api/exec', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: activeSession, code: py, isBash: false })
+        });
+        const d = await r.json();
+        if (d && (d.success || d.ok)) {
+          log.className = 'log-box ok';
+          log.textContent = 'CREATED FOLDER: ' + targetPath;
+          showToast('✓ Created folder: ' + name.trim());
+          fmList();
+        } else {
+          log.className = 'log-box err';
+          log.textContent = 'Create folder failed: ' + (d && (d.error || d.stderr || d.stdout) || '');
+        }
+      } catch (e) {
+        log.className = 'log-box err';
+        log.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    function toggleTermFullscreen(force) {
+      const isFs = typeof force === 'boolean' ? force : !document.body.classList.contains('term-fullscreen');
+      document.body.classList.toggle('term-fullscreen', isFs);
+      const btn = document.getElementById('btnTermFullscreen');
+      if (btn) {
+        btn.classList.toggle('active-fullscreen', isFs);
+        btn.title = isFs ? 'Exit Fullscreen (Esc)' : 'Fullscreen terminal (Esc to exit)';
+        const enterIcon = btn.querySelector('.term-fs-icon-enter');
+        const exitIcon = btn.querySelector('.term-fs-icon-exit');
+        if (enterIcon && exitIcon) {
+          enterIcon.style.display = isFs ? 'none' : 'block';
+          exitIcon.style.display = isFs ? 'block' : 'none';
+        }
+      }
+      if (isFs) {
+        const tabTerm = document.getElementById('tab-terminal');
+        if (tabTerm && !tabTerm.classList.contains('active')) {
+          if (typeof switchTab === 'function') {
+            const termNavBtn = document.querySelector('nav .tab-btn:first-child');
+            switchTab('terminal', termNavBtn ? { target: termNavBtn } : null);
+          }
+        }
+      }
+      setTimeout(() => {
+        if (typeof fitAddon !== 'undefined' && fitAddon) {
+          try { fitAddon.fit(); } catch (_) {}
+        }
+        if (typeof term !== 'undefined' && term) {
+          try { term.refresh(0, term.rows - 1); } catch (_) {}
+        }
+      }, 60);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('term-fullscreen')) {
+        toggleTermFullscreen(false);
+      }
+    });
 
     function esc(s) {
       return String(s == null ? '' : s)
@@ -4062,6 +4651,7 @@
         savedSettings = {};
       }
       applySettings({ ...defaults, ...savedSettings });
+      window.applyUiSettings = applySettings;
 
       function saveSettings() {
         const settings = {
