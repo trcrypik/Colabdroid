@@ -26,6 +26,7 @@ This is a **line-exec** terminal, not a persistent SSH/PTY shell:
 | `PORT` | no | Default `8080` |
 | `COLAB_HOME` / `HOME` | yes on NF | Set to `/data` so tokens survive restarts |
 | `COLAB_AUTH_TOKEN` | no | Bootstrap `token.json` (raw JSON or base64) |
+| `MAX_UPLOAD_MB` | no | Default `2048`; per-file limit for `POST /api/files/upload` |
 
 ## Northflank deploy
 
