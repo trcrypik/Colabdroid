@@ -1387,7 +1387,7 @@
           <button class="btn" type="button" onclick="fmList()">[REFRESH]</button>
           <button class="btn btn-cyan" type="button" onclick="fmNewFolder()" title="Create new directory in current path">[+ FOLDER]</button>
           <button class="btn btn-cyan" type="button" onclick="document.getElementById('fmUploadInput').click()" title="Upload file to current directory">[UPLOAD]</button>
-          <input type="file" id="fmUploadInput" style="display:none;" onchange="fmUpload(event)" />
+          <input type="file" id="fmUploadInput" style="opacity:0;position:absolute;width:1px;height:1px;pointer-events:none;top:0;left:0;" onchange="fmUpload(event)" />
         </div>
         <div id="fmLog" class="log-box">Select a session first, then browse /content.</div>
         <div style="overflow-x:auto;">
@@ -4364,32 +4364,86 @@
       const file = input.files && input.files[0];
       if (!file) return;
 
+      const rawName = (file.name || '').trim();
+      const fallbackExt = file.type ? ('.' + (file.type.split('/')[1] || 'bin').replace(/[^a-zA-Z0-9]/g, '')) : '.bin';
+      const fileName = (rawName && rawName !== 'null' && rawName !== 'undefined')
+        ? rawName
+        : ('upload_' + Date.now().toString(36) + fallbackExt);
+
       const currentPath = (document.getElementById('fmPath').value || fmPath || '/content').trim() || '/content';
+      const sess = (activeSession || '').trim();
       const log = document.getElementById('fmLog');
       log.className = 'log-box';
-      log.textContent = 'Uploading ' + file.name + ' → ' + currentPath + ' …';
-      try {
-        const fd = new FormData();
-        // Some Android WebViews hand the picker a File with an empty name (content:// provider
-        // without DISPLAY_NAME). Such a part is sent as `filename=""` / without a filename and
-        // servers commonly reject it — pass a fallback name so the upload always carries one.
-        fd.append('file', file, file.name || ('upload_' + Date.now().toString(36) + '.bin'));
-        fd.append('path', currentPath);
-        if (activeSession) fd.append('session', activeSession);
+      log.textContent = 'Uploading ' + fileName + (file.size != null ? ' (' + fmtSize(file.size) + ')' : '') + ' → ' + currentPath + ' …';
 
-        const r = await apiFetch('/api/files/upload', { method: 'POST', body: fd });
+      try {
+        let bodyToSend = file;
+        // In Android WebView, reading the file via ArrayBuffer detaches the bytes from the
+        // Android SAF (ContentResolver) lifecycle and avoids multipart stream truncation bugs.
+        // We stream direct application/octet-stream for maximum reliability.
+        if (file.size <= 100 * 1024 * 1024) {
+          try {
+            if (typeof file.arrayBuffer === 'function') {
+              bodyToSend = await file.arrayBuffer();
+            } else {
+              bodyToSend = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+                reader.readAsArrayBuffer(file);
+              });
+            }
+          } catch (readErr) {
+            console.warn('[UPLOAD] arrayBuffer read failed, falling back to direct File object:', readErr);
+            bodyToSend = file;
+          }
+        }
+
+        const q = '?name=' + encodeURIComponent(fileName) +
+                  '&path=' + encodeURIComponent(currentPath) +
+                  (sess ? '&session=' + encodeURIComponent(sess) : '');
+
+        const headers = {
+          'Content-Type': 'application/octet-stream',
+          'x-file-name': encodeURIComponent(fileName),
+          'x-file-path': encodeURIComponent(currentPath)
+        };
+        if (sess) headers['x-session'] = sess;
+
+        let r = await apiFetch('/api/files/upload' + q, {
+          method: 'POST',
+          headers: headers,
+          body: bodyToSend
+        });
+
+        // Fallback to multipart FormData if server rejected octet-stream (e.g. older server version)
+        if (!r.ok && r.status === 400) {
+          try {
+            const clone = r.clone();
+            const errData = await clone.json();
+            if (errData && errData.error && errData.error.includes('file required')) {
+              console.warn('[UPLOAD] Octet-stream rejected, attempting FormData fallback...');
+              const fd = new FormData();
+              fd.append('file', file, fileName);
+              fd.append('path', currentPath);
+              if (sess) fd.append('session', sess);
+              r = await apiFetch('/api/files/upload', { method: 'POST', body: fd });
+            }
+          } catch (_) {}
+        }
+
         const d = await r.json();
-        log.className = 'log-box ' + (d.success ? 'ok' : 'err');
-        log.textContent = (d.success ? 'UPLOADED ' + (d.remotePath || file.name) : 'FAIL') + '\n' + (d.output || d.error || '');
-        if (d.success) {
-          showToast('✓ Uploaded ' + file.name);
+        log.className = 'log-box ' + (d && d.success ? 'ok' : 'err');
+        log.textContent = (d && d.success ? 'UPLOADED ' + (d.remotePath || fileName) : 'FAIL') + '\n' + ((d && (d.output || d.error)) || ('HTTP ' + r.status));
+        if (d && d.success) {
+          showToast('✓ Uploaded ' + fileName);
           fmList();
         }
       } catch (e) {
         log.className = 'log-box err';
-        log.textContent = 'Upload error: ' + e.message;
+        log.textContent = 'Upload error: ' + (e.message || String(e));
       } finally {
-        input.value = '';
+        try { input.value = ''; } catch (_) {}
       }
     }
 
