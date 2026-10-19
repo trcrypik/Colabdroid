@@ -326,15 +326,16 @@ let sshClientVersion = null;
 function ensureSshConfig() {
   const cfg = path.join(SSH_DIR, 'config');
   const MARK = '# colab-backend keepalive';
+  const keepaliveBlock = `${MARK}\nHost *\n  ServerAliveInterval 15\n  ServerAliveCountMax 20\n  TCPKeepAlive yes\n`;
   try {
-    const cur = fs.existsSync(cfg) ? fs.readFileSync(cfg, 'utf8') : '';
-    if (cur.includes(MARK)) return;
-    const sep = cur && !cur.endsWith('\n') ? '\n' : '';
-    fs.writeFileSync(
-      cfg,
-      cur + sep + MARK + '\nHost *\n  ServerAliveInterval 30\n  ServerAliveCountMax 4\n  TCPKeepAlive yes\n',
-      { mode: 0o600 }
-    );
+    let cur = fs.existsSync(cfg) ? fs.readFileSync(cfg, 'utf8') : '';
+    if (cur.includes(MARK)) {
+      cur = cur.replace(/# colab-backend keepalive[\s\S]*?(?=\n\n|Host |\n#|$)/, keepaliveBlock.trim());
+    } else {
+      const sep = cur && !cur.endsWith('\n') ? '\n' : '';
+      cur = cur + sep + keepaliveBlock;
+    }
+    fs.writeFileSync(cfg, cur, { mode: 0o600 });
   } catch (e) {}
 }
 
@@ -1859,6 +1860,31 @@ setInterval(() => {
     }
   }
 }, 20000).unref();
+
+// ---- Colab Runtime Keep-Alive ----
+// Google Colab terminates instances after 45-90 minutes of inactivity if no Jupyter/cloud activity
+// is detected (colab ssh does not count as Jupyter activity in Colab's billing/accounting layer).
+// When an active session is in use, periodically ping the Colab tunnel to prevent idle termination.
+setInterval(async () => {
+  const sessionsToPing = new Set();
+  for (const [key, s] of ptySessions.entries()) {
+    if (!s.dead) {
+      const parts = key.split(':');
+      const sess = parts[1];
+      if (sess && isValidSession(sess)) sessionsToPing.add(sess);
+    }
+  }
+  for (const sess of sessionsToPing) {
+    try {
+      console.log(`[COLAB-KEEPALIVE] Sending heartbeat to runtime "${sess}" to prevent idle reaper...`);
+      // colab exec sends an official execution request through the Google Colab tunnel frontend API,
+      // resetting the cloud idle reaper, while also pinging the local Jupyter server inside the VM.
+      await runCommand('colab', ['exec', '-s', sess], '%%bash\ncurl -s http://127.0.0.1:9000/api/status >/dev/null 2>&1 || true\n', 30000);
+    } catch (e) {
+      console.warn(`[COLAB-KEEPALIVE] Heartbeat failed for "${sess}":`, e.message);
+    }
+  }
+}, 4 * 60 * 1000).unref();
 
 // ---- Real PTY WS: `colab ssh` (default) or legacy `colab console` inside node-pty ----
 // The PTY is NOT tied to the WebSocket: when the client disappears (phone locked, APK sent to the

@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Системная конфигурация SSH для автоматического принятия ключей инстансов Colab
 RUN mkdir -p /etc/ssh/ssh_config.d && \
-    printf "Host *\n  StrictHostKeyChecking accept-new\n  ServerAliveInterval 30\n  ServerAliveCountMax 4\n  TCPKeepAlive yes\n" > /etc/ssh/ssh_config.d/99-colab.conf
+    printf "Host *\n  StrictHostKeyChecking accept-new\n  ServerAliveInterval 15\n  ServerAliveCountMax 20\n  TCPKeepAlive yes\n" > /etc/ssh/ssh_config.d/99-colab.conf
 
 # Установка официальной CLI-утилиты Colab
 RUN pip install --no-cache-dir google-colab-cli \
