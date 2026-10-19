@@ -1702,14 +1702,50 @@ app.get('/api/notebooks/open-url', checkApiKey, async (req, res) => {
 });
 
 app.post('/api/install', checkApiKey, async (req, res) => {
-  const { session, packages } = req.body;
-  if (!packages) return res.status(400).json({ error: 'packages list is required' });
-  const pkgList = Array.isArray(packages) ? packages : String(packages).trim().split(/\s+/);
-  const args = ['install'];
-  if (session) args.push('-s', session);
-  args.push(...pkgList);
-  const result = await runCommand('colab', args, null, 300000);
-  res.json({ success: result.success, output: result.stdout || result.stderr, durationMs: result.durationMs });
+  const { session, packages, aptPackages } = req.body;
+  const outputs = [];
+  let overallSuccess = true;
+  let totalDuration = 0;
+
+  // 1. System packages (APT) via colab exec
+  if (aptPackages && typeof aptPackages === 'string' && aptPackages.trim()) {
+    const aptList = aptPackages.trim().split(/\s+/).filter(Boolean);
+    if (aptList.length > 0) {
+      console.log(`[COLAB-BACKEND] Installing APT packages on session "${session || 'default'}": ${aptList.join(' ')}`);
+      const execCode = `apt-get update -qq && apt-get install -y ${aptList.join(' ')}`;
+      const args = ['exec'];
+      if (session) args.push('-s', session);
+      const aptResult = await runCommand('colab', args, '%%bash\n' + execCode, 300000);
+      totalDuration += (aptResult.durationMs || 0);
+      if (!aptResult.success) overallSuccess = false;
+      outputs.push(`[APT INSTALL: ${aptList.join(' ')}] ${aptResult.success ? 'SUCCESS' : 'FAILED'}\n${(aptResult.stdout || aptResult.stderr || '').trim()}`);
+    }
+  }
+
+  // 2. Python packages via colab install (uv / pip)
+  if (packages) {
+    const pkgList = Array.isArray(packages) ? packages : String(packages).trim().split(/\s+/).filter(Boolean);
+    if (pkgList.length > 0) {
+      console.log(`[COLAB-BACKEND] Installing Python packages on session "${session || 'default'}": ${pkgList.join(' ')}`);
+      const args = ['install'];
+      if (session) args.push('-s', session);
+      args.push(...pkgList);
+      const pyResult = await runCommand('colab', args, null, 300000);
+      totalDuration += (pyResult.durationMs || 0);
+      if (!pyResult.success) overallSuccess = false;
+      outputs.push(`[COLAB INSTALL: ${pkgList.join(' ')}] ${pyResult.success ? 'SUCCESS' : 'FAILED'}\n${(pyResult.stdout || pyResult.stderr || '').trim()}`);
+    }
+  }
+
+  if (outputs.length === 0) {
+    return res.status(400).json({ error: 'No packages specified to install (provide packages or aptPackages)' });
+  }
+
+  res.json({
+    success: overallSuccess,
+    output: outputs.join('\n\n'),
+    durationMs: totalDuration
+  });
 });
 
 // --- WebSocket upgrade router ---
