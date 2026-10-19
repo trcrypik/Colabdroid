@@ -1330,6 +1330,37 @@
         <div class="stat-label">SERVER RESPONSE</div>
         <div id="sessionCreateLog" class="log-box">Create a session to see Colab CLI output (queue, tier limits, errors)…</div>
       </div>
+
+      <!-- AUTO-INSTALL PACKAGES ON RUNTIME CREATION -->
+      <div class="card" id="cardAutoInstall">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+          <span>POST-CREATION PACKAGES (AUTO-INSTALL)</span>
+          <label style="font-size:11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;color:var(--text-dim);font-weight:normal;">
+            <input type="checkbox" id="autoInstallEnabled" checked style="width:auto;margin:0;" onchange="saveAutoInstallConfig()" />
+            [ AUTO-INSTALL ON CREATE ]
+          </label>
+        </div>
+        <p class="hint" style="margin-bottom:8px;">
+          Specify packages to install immediately upon instance creation. System tools (e.g. <code>mc</code>) are installed via <code>apt-get</code>, Python libraries via <code>colab install</code> (uv/pip). Saved automatically &amp; synced with Auth&amp;Config import/export.
+        </p>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;">
+          <div>
+            <label class="stat-label">SYSTEM PACKAGES (APT) — e.g. mc htop tmux</label>
+            <input type="text" id="autoInstallApt" placeholder="mc" oninput="saveAutoInstallConfig()" />
+          </div>
+          <div>
+            <label class="stat-label">PYTHON PACKAGES (UV / PIP) — e.g. transformers accelerate</label>
+            <input type="text" id="autoInstallPip" placeholder="packages..." oninput="saveAutoInstallConfig()" />
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-cyan" id="btnInstallPackagesNow" type="button" onclick="installPackagesManual()">[INSTALL_NOW_ACTIVE_SESSION]</button>
+          <button class="btn" type="button" onclick="resetAutoInstallConfig()">[RESET_DEFAULT]</button>
+          <span id="autoInstallStatus" class="hint" style="margin-left:auto;"></span>
+        </div>
+        <div id="autoInstallLog" class="log-box" style="display:none;margin-top:8px;"></div>
+      </div>
+
       <div id="sessionsListContainer"></div>
     </div>
 
@@ -2841,6 +2872,11 @@
           session: {
             activeSession: activeSession || localStorage.getItem('colab_active_session') || ''
           },
+          autoInstall: {
+            enabled: document.getElementById('autoInstallEnabled') ? document.getElementById('autoInstallEnabled').checked : (localStorage.getItem('colab_auto_install_enabled') !== 'false'),
+            apt: document.getElementById('autoInstallApt') ? document.getElementById('autoInstallApt').value : (localStorage.getItem('colab_auto_install_apt') || 'mc'),
+            pip: document.getElementById('autoInstallPip') ? document.getElementById('autoInstallPip').value : (localStorage.getItem('colab_auto_install_pip') || '')
+          },
           layout: {
             arrowsPos: arrowsPos,
             commandsPos: commandsPos
@@ -2953,6 +2989,22 @@
               if (pad) Object.assign(pad.style, layoutCfg.commandsPos);
             }
             restoredParts.push('Layout');
+          }
+
+          // Auto-install packages configuration
+          const autoInstallCfg = settings.autoInstall || data.colab_auto_install || data.autoInstall;
+          if (autoInstallCfg && typeof autoInstallCfg === 'object') {
+            if (autoInstallCfg.enabled !== undefined) {
+              localStorage.setItem('colab_auto_install_enabled', autoInstallCfg.enabled ? 'true' : 'false');
+            }
+            if (typeof autoInstallCfg.apt === 'string') {
+              localStorage.setItem('colab_auto_install_apt', autoInstallCfg.apt);
+            }
+            if (typeof autoInstallCfg.pip === 'string') {
+              localStorage.setItem('colab_auto_install_pip', autoInstallCfg.pip);
+            }
+            if (typeof loadAutoInstallConfig === 'function') loadAutoInstallConfig();
+            restoredParts.push('Auto-Install Packages');
           }
 
           // 2. Commands templates (supports both full backup format and legacy commands-only format)
@@ -3666,7 +3718,12 @@
           'session: ' + (d.sessionName || '—') + '\n' +
           'duration: ' + (d.durationMs != null ? d.durationMs + ' ms' : '—') + '\n\n' +
           (d.output || d.error || JSON.stringify(d, null, 2));
-        if (ok && d.sessionName) selectSession(d.sessionName);
+        if (ok && d.sessionName) {
+          selectSession(d.sessionName);
+          if (isAutoInstallEnabled()) {
+            await runAutoInstall(d.sessionName);
+          }
+        }
         loadSessions();
       } catch (e) {
         log.className = 'log-box err';
@@ -3724,6 +3781,132 @@
       } catch (e) {
         log.className = 'log-box err';
         log.textContent = e.message;
+      }
+    }
+
+    function isAutoInstallEnabled() {
+      const cb = document.getElementById('autoInstallEnabled');
+      if (cb) return cb.checked;
+      return localStorage.getItem('colab_auto_install_enabled') !== 'false';
+    }
+
+    function saveAutoInstallConfig() {
+      const cb = document.getElementById('autoInstallEnabled');
+      const aptInput = document.getElementById('autoInstallApt');
+      const pipInput = document.getElementById('autoInstallPip');
+      const status = document.getElementById('autoInstallStatus');
+
+      const enabled = cb ? cb.checked : true;
+      const aptVal = aptInput ? aptInput.value.trim() : '';
+      const pipVal = pipInput ? pipInput.value.trim() : '';
+
+      try {
+        localStorage.setItem('colab_auto_install_enabled', enabled ? 'true' : 'false');
+        localStorage.setItem('colab_auto_install_apt', aptVal);
+        localStorage.setItem('colab_auto_install_pip', pipVal);
+        if (status) {
+          status.style.color = 'var(--cyan)';
+          status.textContent = '✓ Saved';
+          setTimeout(() => { if (status) status.textContent = ''; }, 2500);
+        }
+      } catch (e) {
+        if (status) {
+          status.style.color = 'var(--err)';
+          status.textContent = 'Save error: ' + e.message;
+        }
+      }
+    }
+
+    function loadAutoInstallConfig() {
+      const cb = document.getElementById('autoInstallEnabled');
+      const aptInput = document.getElementById('autoInstallApt');
+      const pipInput = document.getElementById('autoInstallPip');
+
+      const savedEnabled = localStorage.getItem('colab_auto_install_enabled');
+      const savedApt = localStorage.getItem('colab_auto_install_apt');
+      const savedPip = localStorage.getItem('colab_auto_install_pip');
+
+      if (cb) cb.checked = (savedEnabled !== 'false');
+      if (aptInput) aptInput.value = (savedApt !== null) ? savedApt : 'mc';
+      if (pipInput) pipInput.value = (savedPip !== null) ? savedPip : '';
+    }
+
+    function resetAutoInstallConfig() {
+      const cb = document.getElementById('autoInstallEnabled');
+      const aptInput = document.getElementById('autoInstallApt');
+      const pipInput = document.getElementById('autoInstallPip');
+      if (cb) cb.checked = true;
+      if (aptInput) aptInput.value = 'mc';
+      if (pipInput) pipInput.value = '';
+      saveAutoInstallConfig();
+      showToast('Auto-install reset to default (mc)');
+    }
+
+    async function runAutoInstall(sessionName) {
+      if (!sessionName) return;
+      const aptVal = (document.getElementById('autoInstallApt')?.value || localStorage.getItem('colab_auto_install_apt') || '').trim();
+      const pipVal = (document.getElementById('autoInstallPip')?.value || localStorage.getItem('colab_auto_install_pip') || '').trim();
+
+      if (!aptVal && !pipVal) return;
+
+      const log = document.getElementById('autoInstallLog');
+      if (log) {
+        log.style.display = 'block';
+        log.className = 'log-box';
+        log.textContent = `[AUTO-INSTALL] Installing packages on "${sessionName}"…\n` +
+          (aptVal ? `• APT packages: ${aptVal}\n` : '') +
+          (pipVal ? `• Python packages (colab install): ${pipVal}\n` : '') +
+          `Please wait (may take 1-2 min)…\n`;
+      }
+
+      try {
+        const r = await apiFetch('/api/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session: sessionName,
+            aptPackages: aptVal || undefined,
+            packages: pipVal || undefined
+          })
+        });
+        const d = await r.json();
+        const ok = !!(d && d.success);
+        if (log) {
+          log.className = 'log-box ' + (ok ? 'ok' : 'err');
+          log.textContent = `[AUTO-INSTALL] ${ok ? 'SUCCESS' : 'FINISHED WITH WARNINGS'} on "${sessionName}"\n` +
+            `Duration: ${d && d.durationMs != null ? d.durationMs + ' ms' : '—'}\n\n` +
+            ((d && (d.output || d.error)) || JSON.stringify(d, null, 2));
+        }
+        showToast(ok ? ('✓ Packages installed on ' + sessionName) : ('⚠ Install finished with warnings on ' + sessionName));
+      } catch (err) {
+        if (log) {
+          log.className = 'log-box err';
+          log.textContent = `[AUTO-INSTALL ERROR] ${err.message}`;
+        }
+        showToast('Auto-install error: ' + err.message);
+      }
+    }
+
+    async function installPackagesManual() {
+      const sess = (activeSession || document.getElementById('newSessName')?.value || '').trim();
+      const log = document.getElementById('autoInstallLog');
+      const btn = document.getElementById('btnInstallPackagesNow');
+
+      if (!sess) {
+        showToast('No active session selected');
+        if (log) {
+          log.style.display = 'block';
+          log.className = 'log-box err';
+          log.textContent = 'Error: Please select an active session or specify session name first.';
+        }
+        return;
+      }
+
+      if (btn) btn.disabled = true;
+      try {
+        await runAutoInstall(sess);
+      } finally {
+        if (btn) btn.disabled = false;
       }
     }
 
@@ -4910,6 +5093,7 @@
     initTermLinkChip();
     updateSessionLabel();
     loadConnectionCfgIntoForm();
+    loadAutoInstallConfig();
     setTermMode(termMode);
     checkAuth();
     restoreDriveJob();
