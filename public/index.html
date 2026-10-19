@@ -1346,7 +1346,7 @@
         <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;">
           <div>
             <label class="stat-label">SYSTEM PACKAGES (APT) — e.g. mc htop tmux</label>
-            <input type="text" id="autoInstallApt" placeholder="mc" oninput="saveAutoInstallConfig()" />
+            <input type="text" id="autoInstallApt" placeholder="mc tmux" oninput="saveAutoInstallConfig()" />
           </div>
           <div>
             <label class="stat-label">PYTHON PACKAGES (UV / PIP) — e.g. transformers accelerate</label>
@@ -2874,7 +2874,7 @@
           },
           autoInstall: {
             enabled: document.getElementById('autoInstallEnabled') ? document.getElementById('autoInstallEnabled').checked : (localStorage.getItem('colab_auto_install_enabled') !== 'false'),
-            apt: document.getElementById('autoInstallApt') ? document.getElementById('autoInstallApt').value : (localStorage.getItem('colab_auto_install_apt') || 'mc'),
+            apt: document.getElementById('autoInstallApt') ? document.getElementById('autoInstallApt').value : (localStorage.getItem('colab_auto_install_apt') || 'mc tmux'),
             pip: document.getElementById('autoInstallPip') ? document.getElementById('autoInstallPip').value : (localStorage.getItem('colab_auto_install_pip') || '')
           },
           layout: {
@@ -3827,7 +3827,7 @@
       const savedPip = localStorage.getItem('colab_auto_install_pip');
 
       if (cb) cb.checked = (savedEnabled !== 'false');
-      if (aptInput) aptInput.value = (savedApt !== null) ? savedApt : 'mc';
+      if (aptInput) aptInput.value = (savedApt !== null) ? savedApt : 'mc tmux';
       if (pipInput) pipInput.value = (savedPip !== null) ? savedPip : '';
     }
 
@@ -3836,10 +3836,10 @@
       const aptInput = document.getElementById('autoInstallApt');
       const pipInput = document.getElementById('autoInstallPip');
       if (cb) cb.checked = true;
-      if (aptInput) aptInput.value = 'mc';
+      if (aptInput) aptInput.value = 'mc tmux';
       if (pipInput) pipInput.value = '';
       saveAutoInstallConfig();
-      showToast('Auto-install reset to default (mc)');
+      showToast('Auto-install reset to default (mc tmux)');
     }
 
     async function runAutoInstall(sessionName) {
