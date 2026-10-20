@@ -29,9 +29,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && node -v && npm -v && python3 --version && ssh -V
 
-# Системная конфигурация SSH для автоматического принятия ключей инстансов Colab
+# Системная конфигурация SSH для автоматического принятия ключей инстансов Colab и мультиплексирования ControlMaster
 RUN mkdir -p /etc/ssh/ssh_config.d && \
-    printf "Host *\n  StrictHostKeyChecking accept-new\n  ServerAliveInterval 15\n  ServerAliveCountMax 20\n  TCPKeepAlive yes\n" > /etc/ssh/ssh_config.d/99-colab.conf
+    printf "Host *\n  StrictHostKeyChecking accept-new\n  ControlMaster auto\n  ControlPath /data/.ssh/cm-%%r@%%h:%%p\n  ControlPersist 10m\n  ServerAliveInterval 15\n  ServerAliveCountMax 20\n  TCPKeepAlive yes\n" > /etc/ssh/ssh_config.d/99-colab.conf
 
 # Установка официальной CLI-утилиты Colab
 RUN pip install --no-cache-dir google-colab-cli \

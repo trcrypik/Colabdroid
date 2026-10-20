@@ -326,7 +326,8 @@ let sshClientVersion = null;
 function ensureSshConfig() {
   const cfg = path.join(SSH_DIR, 'config');
   const MARK = '# colab-backend keepalive';
-  const keepaliveBlock = `${MARK}\nHost *\n  ServerAliveInterval 15\n  ServerAliveCountMax 20\n  TCPKeepAlive yes\n`;
+  const cmPath = path.join(SSH_DIR, 'cm-%r@%h:%p');
+  const keepaliveBlock = `${MARK}\nHost *\n  ServerAliveInterval 15\n  ServerAliveCountMax 20\n  TCPKeepAlive yes\n  ControlMaster auto\n  ControlPath ${cmPath}\n  ControlPersist 10m\n`;
   try {
     let cur = fs.existsSync(cfg) ? fs.readFileSync(cfg, 'utf8') : '';
     if (cur.includes(MARK)) {
