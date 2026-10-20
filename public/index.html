@@ -465,6 +465,47 @@
       white-space: nowrap;
     }
 
+    /* Tmux CTRL+B Dropdown */
+    .tmux-dropdown {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .tmux-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 1000;
+      background: rgba(13, 18, 29, 0.98);
+      border: 1px solid var(--cyan);
+      border-radius: 4px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 12px rgba(0, 240, 255, 0.3);
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 175px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .tmux-dropdown-menu .dropdown-btn {
+      width: 100%;
+      text-align: left;
+      white-space: nowrap;
+      font-size: calc((var(--ui-font-size) - 2px) * var(--ui-button-scale));
+      padding: 3px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+    }
+    .tmux-dropdown-menu .dropdown-btn .key-badge {
+      color: var(--amber);
+      font-weight: 700;
+      font-family: var(--font-mono, monospace);
+    }
+
     /* Floating Virtual Arrows Keypad */
     .arrows-pad {
       position: fixed;
@@ -1336,8 +1377,51 @@
             <div id="execHeaderNav" style="display:none;align-items:center;gap:4px;">
               <button type="button" class="term-header-tab active-header-tab" id="btnHdrLineExec" onclick="switchExecSubView('exec')" title="Вернуться в LINE-EXEC">LINE-EXEC</button>
               <button type="button" class="term-header-tab" id="btnHdrSshPlus" onclick="switchExecSubView('ssh_plus')" title="Открыть окно SSH+ (tmux)">[SSH+]</button>
-              <button type="button" class="term-header-tab" id="btnHdrNewTmuxWin" onclick="createTmuxWindow()" title="Создать еще одно окно в tmux" style="display:none;">[+ ОКНО]</button>
-              <button type="button" class="term-header-tab term-header-close-tab" id="btnHdrCloseSshPlus" onclick="closeSshPlusWindow()" title="Закрыть окно tmux и вернуться в LINE-EXEC" style="display:none;">[✕ ЗАКРЫТЬ ОКНО]</button>
+              <div class="tmux-dropdown" id="tmuxCtrlBDropdown" style="display:none;">
+                <button type="button" class="term-header-tab" id="btnHdrCtrlB" onclick="handleCtrlBClick(event)" title="Послать Ctrl+B в tmux и открыть меню горячих клавиш">[CTRL+B]</button>
+                <div class="tmux-dropdown-menu" id="tmuxCtrlBMenu" style="display:none;">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('&amp;', 'CLOSE WINDOW (&amp;)')">
+                    <span>Закрыть окно</span>
+                    <span class="key-badge">[&amp;]</span>
+                  </button>
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('c', 'NEW WINDOW (c)')">
+                    <span>Новое окно</span>
+                    <span class="key-badge">[c]</span>
+                  </button>
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('n', 'NEXT WINDOW (n)')">
+                    <span>След. окно</span>
+                    <span class="key-badge">[n]</span>
+                  </button>
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('p', 'PREV WINDOW (p)')">
+                    <span>Пред. окно</span>
+                    <span class="key-badge">[p]</span>
+                  </button>
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('w', 'WINDOW LIST (w)')">
+                    <span>Список окон</span>
+                    <span class="key-badge">[w]</span>
+                  </button>
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('%', 'SPLIT VERTICAL (%)')">
+                    <span>Сплит верт.</span>
+                    <span class="key-badge">[%]</span>
+                  </button>
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('&quot;', 'SPLIT HORIZONTAL (&quot;)')">
+                    <span>Сплит гор.</span>
+                    <span class="key-badge">[&quot;]</span>
+                  </button>
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('o', 'NEXT PANE (o)')">
+                    <span>След. панель</span>
+                    <span class="key-badge">[o]</span>
+                  </button>
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('z', 'ZOOM PANE (z)')">
+                    <span>Zoom панели</span>
+                    <span class="key-badge">[z]</span>
+                  </button>
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('d', 'DETACH (d)')">
+                    <span>Отключить tmux</span>
+                    <span class="key-badge">[d]</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="terminal-header-right">
@@ -2308,25 +2392,59 @@
       }
     }
 
-    function createTmuxWindow() {
-      const activeWs = (termMode === 'exec' && currentExecSubView === 'ssh_plus') ? wsExtra : ws;
-      if (activeWs && activeWs.readyState === WebSocket.OPEN) {
-        const tmuxCmd = 'tmux new-window 2>/dev/null || tmux new-session -A -s main\r';
-        activeWs.send(JSON.stringify({ type: 'stdin', data: tmuxCmd }));
-        setStatus('TMUX NEW WINDOW', 'var(--text)');
-      }
-    }
-
-    function closeSshPlusWindow() {
+    function handleCtrlBClick(event) {
+      if (event) event.stopPropagation();
       const activeWs = (termMode === 'exec' && currentExecSubView === 'ssh_plus') ? wsExtra : ws;
       if (activeWs && activeWs.readyState === WebSocket.OPEN) {
         try {
-          activeWs.send(JSON.stringify({ type: 'stdin', data: '\x03exit\r' }));
+          activeWs.send(JSON.stringify({ type: 'stdin', data: '\x02' }));
         } catch (_) {}
       }
-      setTimeout(() => {
-        switchExecSubView('exec');
-      }, 150);
+      const menu = document.getElementById('tmuxCtrlBMenu');
+      const btn = document.getElementById('btnHdrCtrlB');
+      if (!menu) return;
+      const isOpen = menu.style.display !== 'none';
+      if (isOpen) {
+        closeTmuxMenu();
+      } else {
+        closeConnectMenu();
+        menu.style.display = 'flex';
+        if (btn) btn.classList.add('active-header-tab');
+        setStatus('TMUX (CTRL+B SENT)', 'var(--cyan)');
+        const rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth - 8) {
+          menu.style.left = 'auto';
+          menu.style.right = '0';
+        } else {
+          menu.style.left = '0';
+          menu.style.right = 'auto';
+        }
+      }
+    }
+
+    function closeTmuxMenu() {
+      const menu = document.getElementById('tmuxCtrlBMenu');
+      const btn = document.getElementById('btnHdrCtrlB');
+      if (menu) menu.style.display = 'none';
+      if (btn) btn.classList.remove('active-header-tab');
+    }
+
+    function sendTmuxKey(key, label) {
+      const activeWs = (termMode === 'exec' && currentExecSubView === 'ssh_plus') ? wsExtra : ws;
+      if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+        try {
+          activeWs.send(JSON.stringify({ type: 'stdin', data: key }));
+        } catch (_) {}
+      }
+      closeTmuxMenu();
+      if (label) {
+        setStatus('TMUX ' + label, 'var(--text)');
+      }
+      if (termMode === 'exec' && currentExecSubView === 'ssh_plus' && termExtra) {
+        try { termExtra.focus(); } catch (_) {}
+      } else if (term) {
+        try { term.focus(); } catch (_) {}
+      }
     }
 
     function renderExecSubView() {
@@ -2334,16 +2452,14 @@
       const lBox = document.getElementById('lineExecBox');
       const btnExec = document.getElementById('btnHdrLineExec');
       const btnSsh = document.getElementById('btnHdrSshPlus');
-      const btnNewWin = document.getElementById('btnHdrNewTmuxWin');
-      const btnClose = document.getElementById('btnHdrCloseSshPlus');
+      const tmuxDropdown = document.getElementById('tmuxCtrlBDropdown');
 
       if (currentExecSubView === 'ssh_plus') {
         if (lBox) { lBox.classList.remove('visible'); lBox.style.display = 'none'; }
         if (xBoxExtra) xBoxExtra.style.display = 'block';
         if (btnSsh) btnSsh.classList.add('active-header-tab');
         if (btnExec) btnExec.classList.remove('active-header-tab');
-        if (btnNewWin) btnNewWin.style.display = 'inline-flex';
-        if (btnClose) btnClose.style.display = 'inline-flex';
+        if (tmuxDropdown) tmuxDropdown.style.display = 'inline-flex';
         if (!termExtra) initXtermExtra();
         if (!wsExtra || wsExtra.readyState > 1) connectPtyExtra();
         setTimeout(() => {
@@ -2360,8 +2476,10 @@
         if (lBox) { lBox.style.display = ''; lBox.classList.add('visible'); }
         if (btnExec) btnExec.classList.add('active-header-tab');
         if (btnSsh) btnSsh.classList.remove('active-header-tab');
-        if (btnNewWin) btnNewWin.style.display = 'none';
-        if (btnClose) btnClose.style.display = 'none';
+        if (tmuxDropdown) {
+          tmuxDropdown.style.display = 'none';
+          closeTmuxMenu();
+        }
         setStatus(lastExecStatus || (ws && ws.readyState === WebSocket.OPEN ? 'LINE-EXEC ONLINE' : 'OFFLINE'), lastExecStatusColor || 'var(--text)');
       }
     }
@@ -2392,6 +2510,7 @@
       if (termMode === 'pty') {
         if (hdrTitle) { hdrTitle.style.display = ''; hdrTitle.textContent = 'SSH'; }
         if (execNav) execNav.style.display = 'none';
+        closeTmuxMenu();
         if (xBox) xBox.classList.remove('hidden');
         if (xBoxExtra) xBoxExtra.style.display = 'none';
         if (lBox) { lBox.classList.remove('visible'); lBox.style.display = 'none'; }
@@ -2782,6 +2901,10 @@
       const dropdown = document.getElementById('connectDropdown');
       if (dropdown && !dropdown.contains(e.target)) {
         closeConnectMenu();
+      }
+      const tmuxDropdown = document.getElementById('tmuxCtrlBDropdown');
+      if (tmuxDropdown && !tmuxDropdown.contains(e.target)) {
+        closeTmuxMenu();
       }
     });
 
@@ -4070,7 +4193,20 @@
           sendResizeExtra();
           setTimeout(() => {
             if (wsExtra === sock && sock.readyState === WebSocket.OPEN) {
-              const tmuxCmd = 'which tmux >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq tmux); tmux new-window 2>/dev/null || tmux new-session -A -s main\r';
+              const tmuxCmd = 'which tmux >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq tmux); ' +
+                'T=""; if tmux has-session -t =main: 2>/dev/null; then T="main"; else ' +
+                'T=$(tmux list-clients -F "#{session_name}" 2>/dev/null | grep -v -- "^sshplus_" | head -n1); ' +
+                '[ -z "$T" ] && T=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -v -- "^sshplus_" | head -n1); fi; ' +
+                'if [ -n "$T" ] && tmux has-session -t "=${T}:" 2>/dev/null; then ' +
+                'W=$(tmux list-clients -t "=${T}:" -F "#{window_index}" 2>/dev/null | head -n1); ' +
+                '[ -z "$W" ] && W=$(tmux display-message -p -t "=${T}:" "#{window_index}" 2>/dev/null); ' +
+                'S="sshplus_${T}"; tmux has-session -t "=${S}:" 2>/dev/null || tmux new-session -d -t "=${T}:" -s "$S"; ' +
+                'SW=$(tmux display-message -p -t "=${S}:" "#{window_index}" 2>/dev/null); ' +
+                'if [ "$SW" = "$W" ]; then ' +
+                'OW=$(tmux list-windows -t "=${S}:" -F "#{window_index}" 2>/dev/null | grep -v "^${W}$" | head -n1); ' +
+                'if [ -n "$OW" ]; then tmux select-window -t "=${S}:${OW}"; else tmux new-window -t "=${S}:"; fi; fi; ' +
+                'tmux attach-session -t "=${S}:" 2>/dev/null || tmux new-session -A -s main; ' +
+                'else tmux new-session -A -s main; fi\r';
               sock.send(JSON.stringify({ type: 'stdin', data: tmuxCmd }));
             }
           }, 1200);
