@@ -264,6 +264,16 @@
       color: var(--text);
       box-shadow: 0 0 6px rgba(0, 255, 102, 0.25);
     }
+    .term-header-close-tab {
+      border-color: rgba(255, 51, 102, 0.5) !important;
+      color: var(--red) !important;
+    }
+    .term-header-close-tab:hover {
+      background: rgba(255, 51, 102, 0.22) !important;
+      border-color: var(--red) !important;
+      color: #fff !important;
+      box-shadow: 0 0 6px rgba(255, 51, 102, 0.35);
+    }
     #selectModePanel {
       user-select: text !important;
       -webkit-user-select: text !important;
@@ -1325,7 +1335,9 @@
             <span id="termHeaderTitle">SSH</span>
             <div id="execHeaderNav" style="display:none;align-items:center;gap:4px;">
               <button type="button" class="term-header-tab active-header-tab" id="btnHdrLineExec" onclick="switchExecSubView('exec')" title="Вернуться в LINE-EXEC">LINE-EXEC</button>
-              <button type="button" class="term-header-tab" id="btnHdrSshPlus" onclick="switchExecSubView('ssh_plus')" title="Открыть дополнительное параллельное окно SSH+">[SSH+]</button>
+              <button type="button" class="term-header-tab" id="btnHdrSshPlus" onclick="switchExecSubView('ssh_plus')" title="Открыть окно SSH+ (tmux)">[SSH+]</button>
+              <button type="button" class="term-header-tab" id="btnHdrNewTmuxWin" onclick="createTmuxWindow()" title="Создать еще одно окно в tmux" style="display:none;">[+ ОКНО]</button>
+              <button type="button" class="term-header-tab term-header-close-tab" id="btnHdrCloseSshPlus" onclick="closeSshPlusWindow()" title="Закрыть окно tmux и вернуться в LINE-EXEC" style="display:none;">[✕ ЗАКРЫТЬ ОКНО]</button>
             </div>
           </div>
           <div class="terminal-header-right">
@@ -2296,22 +2308,50 @@
       }
     }
 
+    function createTmuxWindow() {
+      const activeWs = (termMode === 'exec' && currentExecSubView === 'ssh_plus') ? wsExtra : ws;
+      if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+        const tmuxCmd = 'tmux new-window 2>/dev/null || tmux new-session -A -s main\r';
+        activeWs.send(JSON.stringify({ type: 'stdin', data: tmuxCmd }));
+        setStatus('TMUX NEW WINDOW', 'var(--text)');
+      }
+    }
+
+    function closeSshPlusWindow() {
+      const activeWs = (termMode === 'exec' && currentExecSubView === 'ssh_plus') ? wsExtra : ws;
+      if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+        try {
+          activeWs.send(JSON.stringify({ type: 'stdin', data: '\x03exit\r' }));
+        } catch (_) {}
+      }
+      setTimeout(() => {
+        switchExecSubView('exec');
+      }, 150);
+    }
+
     function renderExecSubView() {
       const xBoxExtra = document.getElementById('xtermBoxExtra');
       const lBox = document.getElementById('lineExecBox');
       const btnExec = document.getElementById('btnHdrLineExec');
       const btnSsh = document.getElementById('btnHdrSshPlus');
+      const btnNewWin = document.getElementById('btnHdrNewTmuxWin');
+      const btnClose = document.getElementById('btnHdrCloseSshPlus');
 
       if (currentExecSubView === 'ssh_plus') {
         if (lBox) { lBox.classList.remove('visible'); lBox.style.display = 'none'; }
         if (xBoxExtra) xBoxExtra.style.display = 'block';
         if (btnSsh) btnSsh.classList.add('active-header-tab');
         if (btnExec) btnExec.classList.remove('active-header-tab');
+        if (btnNewWin) btnNewWin.style.display = 'inline-flex';
+        if (btnClose) btnClose.style.display = 'inline-flex';
         if (!termExtra) initXtermExtra();
         if (!wsExtra || wsExtra.readyState > 1) connectPtyExtra();
         setTimeout(() => {
           if (fitAddonExtra) {
             try { fitAddonExtra.fit(); sendResizeExtra(); } catch (_) {}
+          }
+          if (termExtra) {
+            try { termExtra.focus(); } catch (_) {}
           }
         }, 50);
         setStatus(lastPtyExtraStatus || (wsExtra && wsExtra.readyState === WebSocket.OPEN ? 'SSH+ ONLINE' : 'OFFLINE'), lastPtyExtraStatusColor || 'var(--text)');
@@ -2320,6 +2360,8 @@
         if (lBox) { lBox.style.display = ''; lBox.classList.add('visible'); }
         if (btnExec) btnExec.classList.add('active-header-tab');
         if (btnSsh) btnSsh.classList.remove('active-header-tab');
+        if (btnNewWin) btnNewWin.style.display = 'none';
+        if (btnClose) btnClose.style.display = 'none';
         setStatus(lastExecStatus || (ws && ws.readyState === WebSocket.OPEN ? 'LINE-EXEC ONLINE' : 'OFFLINE'), lastExecStatusColor || 'var(--text)');
       }
     }
@@ -2332,7 +2374,6 @@
       } else {
         renderExecSubView();
         updateSessionLabel();
-        reconnectTerm();
       }
     }
 
@@ -4024,9 +4065,15 @@
             sendResizeExtra();
             return;
           }
-          termExtra.writeln('\x1b[32m[ssh+ ready]\x1b[0m');
-          termExtraTranscript += '[ssh+ ready]\n';
+          termExtra.writeln('\x1b[32m[ssh+ ready (tmux window)]\x1b[0m');
+          termExtraTranscript += '[ssh+ ready (tmux window)]\n';
           sendResizeExtra();
+          setTimeout(() => {
+            if (wsExtra === sock && sock.readyState === WebSocket.OPEN) {
+              const tmuxCmd = 'which tmux >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq tmux); tmux new-window 2>/dev/null || tmux new-session -A -s main\r';
+              sock.send(JSON.stringify({ type: 'stdin', data: tmuxCmd }));
+            }
+          }, 1200);
         } else if (msg.type === 'error') {
           ptyExtraNoRetry = true;
           termExtra.writeln('\x1b[31m[error] ' + (msg.data || '') + '\x1b[0m');
@@ -4034,9 +4081,14 @@
           if (currentExecSubView === 'ssh_plus') setStatus('ERROR', 'var(--red)');
         } else if (msg.type === 'exit') {
           ptyExtraNoRetry = true;
-          termExtra.writeln('\r\n\x1b[90m[exit ' + msg.exitCode + '] press [RECONNECT] to open a new shell\x1b[0m');
+          termExtra.writeln('\r\n\x1b[90m[exit ' + msg.exitCode + '] tmux window closed\x1b[0m');
           termExtraTranscript += '\n[exit ' + msg.exitCode + ']\n';
-          if (currentExecSubView === 'ssh_plus') setStatus('EXITED', 'var(--amber)');
+          if (currentExecSubView === 'ssh_plus') {
+            setStatus('TMUX CLOSED', 'var(--text)');
+            setTimeout(() => {
+              if (currentExecSubView === 'ssh_plus') switchExecSubView('exec');
+            }, 600);
+          }
         }
       };
       sock.onclose = (ev) => {
