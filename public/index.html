@@ -1071,6 +1071,7 @@
       justify-content: space-between;
       align-items: center;
       gap: 10px;
+      flex-wrap: wrap;
     }
     .ext-modal-title {
       color: var(--cyan);
@@ -1091,15 +1092,18 @@
       text-overflow: ellipsis;
       max-width: 45vw;
     }
-    .ext-modal-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .ext-modal-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
     .ext-modal-close {
       color: var(--red) !important;
       border-color: rgba(255, 51, 102, 0.5) !important;
       font-weight: bold;
       padding: 4px 10px;
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.2;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
     }
     .ext-modal-close:hover {
       background: rgba(255, 51, 102, 0.25) !important;
@@ -1217,6 +1221,7 @@
       <div class="nb-actions">
         <button class="btn btn-cyan" type="button" onclick="copyAuthLink()">[COPY_LINK]</button>
         <a class="btn btn-cyan" id="authBannerOpen" href="#" target="_blank" rel="noopener">[OPEN_LINK]</a>
+        <button class="btn btn-danger" type="button" onclick="dismissAuthBanner()" title="Закрыть">[✕ ЗАКРЫТЬ]</button>
       </div>
       <label class="stat-label">STEP 2: PASTE CODE</label>
       <div style="display:flex;gap:8px;">
@@ -1276,11 +1281,11 @@
           </div>
         </div>
         <div id="termLinkChip" style="display:none;flex-direction:column;gap:6px;padding:6px 10px;background:rgba(255,176,0,0.10);border-bottom:1px solid var(--amber);font-size:11px;">
-          <div style="display:flex;align-items:center;gap:6px;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-cyan" type="button" id="termLinkOpenBtn" style="flex:0 0 auto;">[OPEN URL]</button>
             <button class="btn btn-cyan" type="button" id="termLinkCopyBtn" style="flex:0 0 auto;">[COPY]</button>
             <span id="termLinkHost" title="Show / hide full URL" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--amber);cursor:pointer;text-align:right;"></span>
-            <button class="btn" type="button" onclick="dismissTermLink()" title="Hide" aria-label="Hide" style="flex:0 0 auto;">✕</button>
+            <button class="btn btn-danger" type="button" onclick="dismissTermLink()" title="Закрыть" aria-label="Закрыть" style="flex:0 0 auto;">[✕ ЗАКРЫТЬ]</button>
           </div>
           <textarea id="termLinkFull" readonly rows="4" style="display:none;width:100%;font-size:11px;word-break:break-all;"></textarea>
         </div>
@@ -1667,7 +1672,7 @@
         <div class="ext-modal-actions">
           <button class="btn btn-cyan" id="extModalCopyBtn" type="button" title="Copy URL">[COPY_LINK]</button>
           <a class="btn btn-cyan" id="extModalExternalBtn" href="#" target="_blank" rel="noopener noreferrer" title="Open in standard browser tab">[OPEN_EXTERNAL]</a>
-          <button class="btn ext-modal-close" id="extModalClose" type="button" title="Close window" aria-label="Close">[X]</button>
+          <button class="btn ext-modal-close" id="extModalClose" type="button" onclick="closeExtModal()" title="Закрыть окно" aria-label="Закрыть">[✕ ЗАКРЫТЬ]</button>
         </div>
       </div>
       <div id="extModalNotice" class="ext-modal-notice">
@@ -1678,7 +1683,10 @@
         <iframe id="extModalIframe" class="ext-modal-iframe" src="about:blank" allow="clipboard-read; clipboard-write" allowfullscreen></iframe>
         <div id="extModalFallback" class="ext-modal-fallback" style="display:none;">
           <p>Google and most other sites forbid being embedded in an iframe (X-Frame-Options / CSP), so this link opens in a separate small popup window. The browser blocked the popup — click the button below (or copy the link).</p>
-          <div><button class="btn btn-cyan" id="extModalPopupBtn" type="button">[OPEN_POPUP]</button></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-cyan" id="extModalPopupBtn" type="button">[OPEN_POPUP]</button>
+            <button class="btn btn-danger" type="button" onclick="closeExtModal()" title="Закрыть окно">[✕ ЗАКРЫТЬ]</button>
+          </div>
           <textarea id="extModalFallbackUrl" readonly rows="5" onclick="this.select()"></textarea>
         </div>
       </div>
@@ -1729,10 +1737,20 @@
     const _origWindowOpen = window.open;
 
     function canFrame(url) {
-      try { return new URL(url, location.href).origin === location.origin; } catch (e) { return false; }
+      try {
+        const u = new URL(url, location.href);
+        if (u.origin !== location.origin) return false;
+        if (/accounts\.google\.com|google\.com|oauth|\/auth|login|signin|device|antigravity|authorize/i.test(url)) return false;
+        return true;
+      } catch (e) { return false; }
     }
 
     function openNewTab(url) {
+      if (!url) return null;
+      try {
+        const w = _origWindowOpen.call(window, url, '_blank');
+        if (w) return w;
+      } catch (e) {}
       try {
         const a = document.createElement('a');
         a.href = url;
@@ -1748,24 +1766,25 @@
     }
 
     function openPopup(url) {
+      if (!url) return null;
+      const isMobile = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+                       /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+      if (isMobile) {
+        return openNewTab(url);
+      }
       const w = 520, h = 720;
       const left = Math.max(0, Math.round((window.screenX || 0) + (window.outerWidth - w) / 2));
       const top = Math.max(0, Math.round((window.screenY || 0) + (window.outerHeight - h) / 2));
       let win = null;
-      const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-      if (touch) {
-        if (navigator.userActivation && !navigator.userActivation.isActive) return null;
-        return openNewTab(url);
-      }
       try {
-        win = _origWindowOpen.call(window, '', 'colab_ext_window',
+        win = _origWindowOpen.call(window, url, 'colab_ext_window',
           'popup=yes,width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes');
       } catch (e) {}
-      if (!win) return null;
-      try { win.opener = null; } catch (e) {}
-      try { win.location.href = url; } catch (e) { try { win.close(); } catch (_) {} return null; }
-      try { win.focus(); } catch (e) {}
-      return win;
+      if (win) {
+        try { win.opener = null; win.focus(); } catch (_) {}
+        return win;
+      }
+      return openNewTab(url);
     }
 
     function openExtModal(url) {
@@ -4047,6 +4066,14 @@
           openBtn.style.marginLeft = '6px';
           openBtn.onclick = () => openExtModal(u);
           row.appendChild(openBtn);
+          const closeBtn = document.createElement('button');
+          closeBtn.className = 'btn btn-danger';
+          closeBtn.type = 'button';
+          closeBtn.textContent = '[✕ ЗАКРЫТЬ]';
+          closeBtn.style.marginTop = '4px';
+          closeBtn.style.marginLeft = '6px';
+          closeBtn.onclick = () => { log.innerHTML = '—'; log.className = 'log-box'; };
+          row.appendChild(closeBtn);
           log.appendChild(row);
         });
       } else {
@@ -4208,6 +4235,14 @@
           btn.onclick = () => openExtModal(url);
           log.appendChild(document.createElement('br'));
           log.appendChild(btn);
+          const closeBtn = document.createElement('button');
+          closeBtn.className = 'btn btn-danger';
+          closeBtn.type = 'button';
+          closeBtn.style.marginTop = '8px';
+          closeBtn.style.marginLeft = '6px';
+          closeBtn.textContent = '[✕ ЗАКРЫТЬ]';
+          closeBtn.onclick = () => { log.innerHTML = '—'; log.className = 'log-box'; };
+          log.appendChild(closeBtn);
           openExtModal(url);
         } else {
           pre.textContent += '\n\n' + JSON.stringify(d, null, 2);
