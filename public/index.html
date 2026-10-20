@@ -232,10 +232,38 @@
     .term-scroll-btn:active {
       background: rgba(0, 240, 255, 0.35); transform: translateY(1px);
     }
-    #xtermBox { flex: 1; min-height: 0; padding: 4px; overflow: hidden; }
-    #xtermBox .xterm { height: 100%; }
-    #xtermBox .xterm-viewport { overflow-y: auto !important; }
-    #xtermBox, #xtermBox .xterm, #xtermBox .xterm-screen { user-select: text; -webkit-user-select: text; }
+    #xtermBox, #xtermBoxExtra { flex: 1; min-height: 0; padding: 4px; overflow: hidden; }
+    #xtermBox .xterm, #xtermBoxExtra .xterm { height: 100%; }
+    #xtermBox .xterm-viewport, #xtermBoxExtra .xterm-viewport { overflow-y: auto !important; }
+    #xtermBox, #xtermBox .xterm, #xtermBox .xterm-screen,
+    #xtermBoxExtra, #xtermBoxExtra .xterm, #xtermBoxExtra .xterm-screen { user-select: text; -webkit-user-select: text; }
+    .term-header-tab {
+      background: transparent;
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      color: var(--cyan);
+      font-family: inherit;
+      font-size: calc((var(--ui-font-size) - 2px) * var(--ui-button-scale));
+      font-weight: bold;
+      padding: 1px 7px;
+      border-radius: 3px;
+      cursor: pointer;
+      line-height: 1.3;
+      transition: all 0.15s ease;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .term-header-tab:hover {
+      background: rgba(0, 240, 255, 0.18);
+      border-color: var(--cyan);
+      color: #fff;
+    }
+    .term-header-tab.active-header-tab {
+      background: rgba(0, 255, 102, 0.18);
+      border-color: var(--text);
+      color: var(--text);
+      box-shadow: 0 0 6px rgba(0, 255, 102, 0.25);
+    }
     #selectModePanel {
       user-select: text !important;
       -webkit-user-select: text !important;
@@ -470,6 +498,37 @@
       pointer-events: none;
     }
     .arrows-pad-title .drag-icon { color: #8892b0; font-size: 10px; }
+    .arrows-pad-header-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .arrows-pad-lock {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #8892b0;
+      font-size: 13px;
+      line-height: 1;
+      padding: 2px 4px;
+      border-radius: 3px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+      touch-action: manipulation;
+    }
+    .arrows-pad-lock:hover {
+      background: rgba(0, 240, 255, 0.18);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+    .arrows-pad-lock.locked {
+      background: rgba(255, 176, 0, 0.22);
+      border-color: var(--amber);
+      color: var(--amber);
+      box-shadow: 0 0 6px rgba(255, 176, 0, 0.4);
+    }
     .arrows-pad-close {
       background: transparent;
       border: 1px solid transparent;
@@ -1071,7 +1130,6 @@
       justify-content: space-between;
       align-items: center;
       gap: 10px;
-      flex-wrap: wrap;
     }
     .ext-modal-title {
       color: var(--cyan);
@@ -1092,18 +1150,15 @@
       text-overflow: ellipsis;
       max-width: 45vw;
     }
-    .ext-modal-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; }
+    .ext-modal-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .ext-modal-close {
       color: var(--red) !important;
       border-color: rgba(255, 51, 102, 0.5) !important;
       font-weight: bold;
       padding: 4px 10px;
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.2;
       cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
     }
     .ext-modal-close:hover {
       background: rgba(255, 51, 102, 0.25) !important;
@@ -1221,7 +1276,6 @@
       <div class="nb-actions">
         <button class="btn btn-cyan" type="button" onclick="copyAuthLink()">[COPY_LINK]</button>
         <a class="btn btn-cyan" id="authBannerOpen" href="#" target="_blank" rel="noopener">[OPEN_LINK]</a>
-        <button class="btn btn-danger" type="button" onclick="dismissAuthBanner()" title="Закрыть">[✕ ЗАКРЫТЬ]</button>
       </div>
       <label class="stat-label">STEP 2: PASTE CODE</label>
       <div style="display:flex;gap:8px;">
@@ -1269,6 +1323,10 @@
               </svg>
             </button>
             <span id="termHeaderTitle">SSH</span>
+            <div id="execHeaderNav" style="display:none;align-items:center;gap:4px;">
+              <button type="button" class="term-header-tab active-header-tab" id="btnHdrLineExec" onclick="switchExecSubView('exec')" title="Вернуться в LINE-EXEC">LINE-EXEC</button>
+              <button type="button" class="term-header-tab" id="btnHdrSshPlus" onclick="switchExecSubView('ssh_plus')" title="Открыть дополнительное параллельное окно SSH+">[SSH+]</button>
+            </div>
           </div>
           <div class="terminal-header-right">
             <span id="termStatus">OFFLINE</span>
@@ -1281,15 +1339,16 @@
           </div>
         </div>
         <div id="termLinkChip" style="display:none;flex-direction:column;gap:6px;padding:6px 10px;background:rgba(255,176,0,0.10);border-bottom:1px solid var(--amber);font-size:11px;">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:6px;">
             <button class="btn btn-cyan" type="button" id="termLinkOpenBtn" style="flex:0 0 auto;">[OPEN URL]</button>
             <button class="btn btn-cyan" type="button" id="termLinkCopyBtn" style="flex:0 0 auto;">[COPY]</button>
             <span id="termLinkHost" title="Show / hide full URL" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--amber);cursor:pointer;text-align:right;"></span>
-            <button class="btn btn-danger" type="button" onclick="dismissTermLink()" title="Закрыть" aria-label="Закрыть" style="flex:0 0 auto;">[✕ ЗАКРЫТЬ]</button>
+            <button class="btn" type="button" onclick="dismissTermLink()" title="Hide" aria-label="Hide" style="flex:0 0 auto;">✕</button>
           </div>
           <textarea id="termLinkFull" readonly rows="4" style="display:none;width:100%;font-size:11px;word-break:break-all;"></textarea>
         </div>
         <div id="xtermBox"></div>
+        <div id="xtermBoxExtra" style="display:none;"></div>
         <pre id="selectModePanel" class="terminal-logs" style="display:none;margin:0;flex:1;min-height:0;user-select:text;-webkit-user-select:text;-webkit-touch-callout:default;cursor:text;"></pre>
         <div id="lineExecBox">
           <div id="terminalLogs" class="terminal-logs">Line-exec mode.</div>
@@ -1354,7 +1413,7 @@
             <input type="text" id="autoInstallApt" placeholder="mc tmux" oninput="saveAutoInstallConfig()" />
           </div>
           <div>
-            <label class="stat-label">PYTHON PACKAGES (UV / PIP) — e.g. base64 pathlib</label>
+            <label class="stat-label">PYTHON PACKAGES (UV / PIP) — e.g. transformers accelerate</label>
             <input type="text" id="autoInstallPip" placeholder="packages..." oninput="saveAutoInstallConfig()" />
           </div>
         </div>
@@ -1531,11 +1590,14 @@
         <span class="drag-icon">⋮⋮</span>
         <span id="arrowsPadTitleText">KEYPAD</span>
       </div>
-      <button class="arrows-pad-close" type="button" onclick="toggleArrowsPanel(false)" title="Close keypad">✕</button>
+      <div class="arrows-pad-header-actions">
+        <button class="arrows-pad-lock" id="btnLockAndroidKeyboard" type="button" onclick="toggleAndroidKeyboardLock()" title="Заблокировать экранную клавиатуру Android" aria-label="Toggle Android keyboard lock">🔓</button>
+        <button class="arrows-pad-close" type="button" onclick="toggleArrowsPanel(false)" title="Close keypad">✕</button>
+      </div>
     </div>
 
     <div class="arrows-pad-body" id="arrowsPadBody">
-      <!-- Left expandable wing: F1-F10 + Tab + Shift + BS + PgUp + PgDn + Copy + Paste + Clear + DelAll -->
+      <!-- Left expandable wing: F1-F10 + Tab + Shift + BS + Space + / + Copy + Paste + Clear + DelAll -->
       <div id="arrowsFnSidePanel" class="arrows-fn-side" style="display:none;" aria-label="Extended function keypad">
         <!-- Row 1: F1, F2, F3, F4, F5 -->
         <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f1')" title="F1">F1</button>
@@ -1551,15 +1613,15 @@
         <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f9')" title="F9">F9</button>
         <button type="button" class="pad-key key-ext-fn" onclick="pressPadKey('f10')" title="F10">F10</button>
 
-        <!-- Row 3: TAB, SHIFT, ⌫, PG UP, PG DN -->
+        <!-- Row 3: TAB, SHIFT, ⌫, SPACE, / -->
         <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('tab')" title="Tab (⇥)">TAB</button>
         <button type="button" class="pad-key key-ext-nav key-mod" id="padKeyShift" onclick="toggleModifier('shift')" title="Toggle SHIFT (Latch/Release)">
           <span>SHIFT</span>
           <span class="key-mod-led" id="ledShift"></span>
         </button>
         <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('backspace')" title="Backspace (Delete previous character)">⌫ BS</button>
-        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('pgup')" title="Page Up (⇞)">PG UP</button>
-        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('pgdown')" title="Page Down (⇟)">PG DN</button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('space')" title="Space">SPACE</button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('slash')" title="Slash"> / </button>
 
         <!-- Row 4: COPY, PASTE, CLEAR, DEL ALL (spans 2 cols) -->
         <button type="button" class="pad-key key-ext-action key-ext-copy" onclick="pressPadKey('copy')" title="Copy selection to clipboard">COPY</button>
@@ -1568,12 +1630,12 @@
         <button type="button" class="pad-key key-ext-danger key-ext-delall" onclick="pressPadKey('delall')" title="Delete entire line (Ctrl+A, Ctrl+K)">DEL ALL</button>
       </div>
 
-      <!-- Vertical row: HOME, END, SPACE, / -->
+      <!-- Vertical row: HOME, END, PG UP, PG DN -->
       <div class="arrows-vert-side" aria-label="Quick navigation keypad">
         <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('home')" title="Home">HOME</button>
         <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('end')" title="End">END</button>
-        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('space')" title="Space">SPACE</button>
-        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('slash')" title="Slash"> / </button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('pgup')" title="Page Up (⇞)">PG UP</button>
+        <button type="button" class="pad-key key-ext-nav" onclick="pressPadKey('pgdown')" title="Page Down (⇟)">PG DN</button>
       </div>
 
       <!-- Right main arrows grid -->
@@ -1595,7 +1657,7 @@
         <button type="button" class="pad-key key-arrow" onclick="pressPadKey('right')" title="Right Arrow (→)">→</button>
 
         <!-- Row 3: Fn, ↓, ALT -->
-        <button type="button" class="pad-key key-fn key-mod" id="padKeyFn" onclick="pressPadKey('fn')" title="Expand/Collapse Extended Keys (F1-F10, Tab, Shift, BS, PgUp/Dn, Copy, Paste, Clear, DelAll)">
+        <button type="button" class="pad-key key-fn key-mod" id="padKeyFn" onclick="pressPadKey('fn')" title="Expand/Collapse Extended Keys (F1-F10, Tab, Shift, BS, Space, Slash, Copy, Paste, Clear, DelAll)">
           <span>Fn</span>
           <span class="key-mod-led" id="ledFn"></span>
         </button>
@@ -1672,7 +1734,7 @@
         <div class="ext-modal-actions">
           <button class="btn btn-cyan" id="extModalCopyBtn" type="button" title="Copy URL">[COPY_LINK]</button>
           <a class="btn btn-cyan" id="extModalExternalBtn" href="#" target="_blank" rel="noopener noreferrer" title="Open in standard browser tab">[OPEN_EXTERNAL]</a>
-          <button class="btn ext-modal-close" id="extModalClose" type="button" onclick="closeExtModal()" title="Закрыть окно" aria-label="Закрыть">[✕ ЗАКРЫТЬ]</button>
+          <button class="btn ext-modal-close" id="extModalClose" type="button" title="Close window" aria-label="Close">[X]</button>
         </div>
       </div>
       <div id="extModalNotice" class="ext-modal-notice">
@@ -1683,10 +1745,7 @@
         <iframe id="extModalIframe" class="ext-modal-iframe" src="about:blank" allow="clipboard-read; clipboard-write" allowfullscreen></iframe>
         <div id="extModalFallback" class="ext-modal-fallback" style="display:none;">
           <p>Google and most other sites forbid being embedded in an iframe (X-Frame-Options / CSP), so this link opens in a separate small popup window. The browser blocked the popup — click the button below (or copy the link).</p>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <button class="btn btn-cyan" id="extModalPopupBtn" type="button">[OPEN_POPUP]</button>
-            <button class="btn btn-danger" type="button" onclick="closeExtModal()" title="Закрыть окно">[✕ ЗАКРЫТЬ]</button>
-          </div>
+          <div><button class="btn btn-cyan" id="extModalPopupBtn" type="button">[OPEN_POPUP]</button></div>
           <textarea id="extModalFallbackUrl" readonly rows="5" onclick="this.select()"></textarea>
         </div>
       </div>
@@ -1716,7 +1775,21 @@
       termSid = 'd' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
       localStorage.setItem('colab_term_sid', termSid);
     }
+    let termSidExtra = localStorage.getItem('colab_term_sid_extra');
+    if (!termSidExtra) {
+      termSidExtra = 'e' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      localStorage.setItem('colab_term_sid_extra', termSidExtra);
+    }
+    let currentExecSubView = localStorage.getItem('colab_exec_subview') || 'exec';
+    let isAndroidKeyboardLocked = localStorage.getItem('colab_android_kbd_locked') === 'true';
+
     let ws = null, wsRetryTimer = null, term = null, fitAddon = null;
+    let wsExtra = null, wsExtraRetryTimer = null, termExtra = null, fitAddonExtra = null;
+    let ptyExtraNoRetry = false, reconnectExtraAttempts = 0;
+    let termExtraTranscript = '';
+    let lastPtyStatus = '', lastPtyStatusColor = '';
+    let lastPtyExtraStatus = '', lastPtyExtraStatusColor = '';
+    let lastExecStatus = '', lastExecStatusColor = '';
     let fmPath = '/content';
     let termTranscript = '';
     let selectMode = false;
@@ -1737,20 +1810,10 @@
     const _origWindowOpen = window.open;
 
     function canFrame(url) {
-      try {
-        const u = new URL(url, location.href);
-        if (u.origin !== location.origin) return false;
-        if (/accounts\.google\.com|google\.com|oauth|\/auth|login|signin|device|antigravity|authorize/i.test(url)) return false;
-        return true;
-      } catch (e) { return false; }
+      try { return new URL(url, location.href).origin === location.origin; } catch (e) { return false; }
     }
 
     function openNewTab(url) {
-      if (!url) return null;
-      try {
-        const w = _origWindowOpen.call(window, url, '_blank');
-        if (w) return w;
-      } catch (e) {}
       try {
         const a = document.createElement('a');
         a.href = url;
@@ -1766,25 +1829,24 @@
     }
 
     function openPopup(url) {
-      if (!url) return null;
-      const isMobile = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
-                       /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
-      if (isMobile) {
-        return openNewTab(url);
-      }
       const w = 520, h = 720;
       const left = Math.max(0, Math.round((window.screenX || 0) + (window.outerWidth - w) / 2));
       const top = Math.max(0, Math.round((window.screenY || 0) + (window.outerHeight - h) / 2));
       let win = null;
+      const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      if (touch) {
+        if (navigator.userActivation && !navigator.userActivation.isActive) return null;
+        return openNewTab(url);
+      }
       try {
-        win = _origWindowOpen.call(window, url, 'colab_ext_window',
+        win = _origWindowOpen.call(window, '', 'colab_ext_window',
           'popup=yes,width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes');
       } catch (e) {}
-      if (win) {
-        try { win.opener = null; win.focus(); } catch (_) {}
-        return win;
-      }
-      return openNewTab(url);
+      if (!win) return null;
+      try { win.opener = null; } catch (e) {}
+      try { win.location.href = url; } catch (e) { try { win.close(); } catch (_) {} return null; }
+      try { win.focus(); } catch (e) {}
+      return win;
     }
 
     function openExtModal(url) {
@@ -2152,12 +2214,30 @@
     }
     function setStatus(text, color) {
       const el = document.getElementById('termStatus');
-      el.textContent = text;
-      el.style.color = color || 'var(--text)';
+      if (el) {
+        el.textContent = text;
+        el.style.color = color || 'var(--text)';
+      }
+      if (termMode === 'pty') {
+        lastPtyStatus = text;
+        lastPtyStatusColor = color;
+      } else if (termMode === 'exec') {
+        if (currentExecSubView === 'ssh_plus') {
+          lastPtyExtraStatus = text;
+          lastPtyExtraStatusColor = color;
+        } else {
+          lastExecStatus = text;
+          lastExecStatusColor = color;
+        }
+      }
     }
     function updateSessionLabel() {
       document.getElementById('currentSessionLabel').textContent = activeSession || 'DEFAULT';
-      document.getElementById('termModeLabel').textContent = termMode === 'pty' ? 'SSH' : 'LINE-EXEC';
+      let modeText = 'SSH';
+      if (termMode === 'exec') {
+        modeText = (currentExecSubView === 'ssh_plus') ? 'SSH+' : 'LINE-EXEC';
+      }
+      document.getElementById('termModeLabel').textContent = modeText;
     }
     function loadConnectionCfgIntoForm() {
       const c = getCfg();
@@ -2204,8 +2284,55 @@
       if (name === 'files') fmList();
       if (name === 'notebooks') { restoreDriveJob(); }
       if (name === 'auth') { loadConnectionCfgIntoForm(); checkAuth(); loadSshKey(); }
-      if (name === 'terminal' && termMode === 'pty') {
-        setTimeout(() => { try { fitAddon && fitAddon.fit(); sendResize(); } catch (e) {} }, 50);
+      if (name === 'terminal') {
+        setTimeout(() => {
+          try {
+            if (termMode === 'pty' && fitAddon) { fitAddon.fit(); sendResize(); }
+            else if (termMode === 'exec' && currentExecSubView === 'ssh_plus' && fitAddonExtra) {
+              fitAddonExtra.fit(); sendResizeExtra();
+            }
+          } catch (e) {}
+        }, 50);
+      }
+    }
+
+    function renderExecSubView() {
+      const xBoxExtra = document.getElementById('xtermBoxExtra');
+      const lBox = document.getElementById('lineExecBox');
+      const btnExec = document.getElementById('btnHdrLineExec');
+      const btnSsh = document.getElementById('btnHdrSshPlus');
+
+      if (currentExecSubView === 'ssh_plus') {
+        if (lBox) { lBox.classList.remove('visible'); lBox.style.display = 'none'; }
+        if (xBoxExtra) xBoxExtra.style.display = 'block';
+        if (btnSsh) btnSsh.classList.add('active-header-tab');
+        if (btnExec) btnExec.classList.remove('active-header-tab');
+        if (!termExtra) initXtermExtra();
+        if (!wsExtra || wsExtra.readyState > 1) connectPtyExtra();
+        setTimeout(() => {
+          if (fitAddonExtra) {
+            try { fitAddonExtra.fit(); sendResizeExtra(); } catch (_) {}
+          }
+        }, 50);
+        setStatus(lastPtyExtraStatus || (wsExtra && wsExtra.readyState === WebSocket.OPEN ? 'SSH+ ONLINE' : 'OFFLINE'), lastPtyExtraStatusColor || 'var(--text)');
+      } else {
+        if (xBoxExtra) xBoxExtra.style.display = 'none';
+        if (lBox) { lBox.style.display = ''; lBox.classList.add('visible'); }
+        if (btnExec) btnExec.classList.add('active-header-tab');
+        if (btnSsh) btnSsh.classList.remove('active-header-tab');
+        setStatus(lastExecStatus || (ws && ws.readyState === WebSocket.OPEN ? 'LINE-EXEC ONLINE' : 'OFFLINE'), lastExecStatusColor || 'var(--text)');
+      }
+    }
+
+    function switchExecSubView(subView) {
+      currentExecSubView = subView === 'ssh_plus' ? 'ssh_plus' : 'exec';
+      localStorage.setItem('colab_exec_subview', currentExecSubView);
+      if (termMode !== 'exec') {
+        setTermMode('exec');
+      } else {
+        renderExecSubView();
+        updateSessionLabel();
+        reconnectTerm();
       }
     }
 
@@ -2214,10 +2341,27 @@
       localStorage.setItem('colab_term_mode', termMode);
       document.getElementById('btnModePty').classList.toggle('active-mode', termMode === 'pty');
       document.getElementById('btnModeExec').classList.toggle('active-mode', termMode === 'exec');
-      document.getElementById('xtermBox').classList.toggle('hidden', termMode !== 'pty');
-      document.getElementById('lineExecBox').classList.toggle('visible', termMode === 'exec');
-      document.getElementById('termHeaderTitle').textContent =
-        termMode === 'pty' ? 'SSH' : 'LINE-EXEC';
+
+      const hdrTitle = document.getElementById('termHeaderTitle');
+      const execNav = document.getElementById('execHeaderNav');
+      const xBox = document.getElementById('xtermBox');
+      const xBoxExtra = document.getElementById('xtermBoxExtra');
+      const lBox = document.getElementById('lineExecBox');
+
+      if (termMode === 'pty') {
+        if (hdrTitle) { hdrTitle.style.display = ''; hdrTitle.textContent = 'SSH'; }
+        if (execNav) execNav.style.display = 'none';
+        if (xBox) xBox.classList.remove('hidden');
+        if (xBoxExtra) xBoxExtra.style.display = 'none';
+        if (lBox) { lBox.classList.remove('visible'); lBox.style.display = 'none'; }
+        setStatus(lastPtyStatus || (ws && ws.readyState === WebSocket.OPEN ? 'SSH ONLINE' : 'OFFLINE'), lastPtyStatusColor || 'var(--text)');
+      } else {
+        if (hdrTitle) hdrTitle.style.display = 'none';
+        if (execNav) execNav.style.display = 'inline-flex';
+        if (xBox) xBox.classList.add('hidden');
+        renderExecSubView();
+      }
+
       updateSessionLabel();
       reconnectTerm();
     }
@@ -2260,6 +2404,7 @@
       } catch (e) { console.warn('web-links addon failed', e); }
       term.open(document.getElementById('xtermBox'));
       fitAddon.fit();
+      if (isAndroidKeyboardLocked) applyAndroidKeyboardLock();
 
       term.attachCustomKeyEventHandler((ev) => {
         if (ev.type !== 'keydown') return true;
@@ -2315,15 +2460,187 @@
       if (window.ResizeObserver) new ResizeObserver(refit).observe(document.getElementById('xtermBox'));
     }
 
-    function clearTerminal() {
-      if (term) {
-        try { term.clear(); term.write('\x1b[2J\x1b[H'); } catch (e) {
-          try { term.reset(); } catch (e2) {}
+    function initXtermExtra() {
+      if (termExtra) return;
+      let curSize = 13;
+      let curFont = 'mono';
+      try {
+        const saved = JSON.parse(localStorage.getItem('colab_ui_settings') || '{}');
+        if (saved.fontSize) curSize = Number(saved.fontSize) || 13;
+        if (saved.font) curFont = saved.font;
+      } catch (_) {}
+
+      termExtra = new Terminal({
+        cursorBlink: true,
+        fontSize: curSize,
+        fontFamily: FONT_FAMILIES[curFont] || FONT_FAMILIES.mono,
+        theme: {
+          background: '#050608',
+          foreground: '#d1d5db',
+          cursor: '#00f0ff',
+          selectionBackground: 'rgba(0,240,255,0.35)',
+          selectionForeground: '#ffffff'
+        },
+        allowProposedApi: true,
+        linkHandler: {
+          allowNonHttpProtocols: false,
+          activate: (ev, uri) => { if (/^https?:\/\//i.test(uri)) openExtModal(uri); }
+        },
+        scrollback: 5000,
+        rightClickSelectsWord: true
+      });
+      fitAddonExtra = new FitAddon.FitAddon();
+      termExtra.loadAddon(fitAddonExtra);
+      try {
+        if (window.WebLinksAddon) {
+          termExtra.loadAddon(new WebLinksAddon.WebLinksAddon((ev, uri) => openExtModal(uri)));
+        }
+      } catch (e) { console.warn('web-links addon failed for extra term', e); }
+      termExtra.open(document.getElementById('xtermBoxExtra'));
+      fitAddonExtra.fit();
+
+      termExtra.attachCustomKeyEventHandler((ev) => {
+        if (ev.type !== 'keydown') return true;
+        const mod = ev.ctrlKey || ev.metaKey;
+        if (mod && (ev.key === 'c' || ev.key === 'C') && termExtra.hasSelection()) {
+          const sel = termExtra.getSelection();
+          if (sel) {
+            navigator.clipboard.writeText(sel).catch(() => {});
+            return false;
+          }
+        }
+        return true;
+      });
+
+      termExtra.onData((data) => {
+        if (termMode !== 'exec' || currentExecSubView !== 'ssh_plus' || !wsExtra || wsExtra.readyState !== WebSocket.OPEN) return;
+        let out = data;
+        if (virtualCtrlActive || virtualAltActive || virtualShiftActive) {
+          if (data.length === 1) {
+            let code = data.charCodeAt(0);
+            if (virtualShiftActive) {
+              if (code >= 97 && code <= 122) out = String.fromCharCode(code - 32);
+              else if (code >= 65 && code <= 90) out = String.fromCharCode(code + 32);
+            }
+            if (virtualCtrlActive) {
+              code = out.charCodeAt(0);
+              if (code >= 65 && code <= 90) out = String.fromCharCode(code - 64);
+              else if (code >= 97 && code <= 122) out = String.fromCharCode(code - 96);
+              else if (data === ' ' || data === '@') out = '\x00';
+              else if (data === '[') out = '\x1b';
+              else if (data === '\\') out = '\x1c';
+              else if (data === ']') out = '\x1d';
+            }
+            if (virtualAltActive) {
+              out = '\x1b' + out;
+            }
+          }
+        }
+        wsExtra.send(JSON.stringify({ type: 'stdin', data: out }));
+      });
+
+      if (isAndroidKeyboardLocked) {
+        applyAndroidKeyboardLock();
+      }
+
+      let resizeExtraTimer = null;
+      const refitExtra = () => {
+        if (resizeExtraTimer) clearTimeout(resizeExtraTimer);
+        resizeExtraTimer = setTimeout(() => {
+          resizeExtraTimer = null;
+          if (termMode !== 'exec' || currentExecSubView !== 'ssh_plus' || !fitAddonExtra) return;
+          const box = document.getElementById('xtermBoxExtra');
+          if (!box || box.offsetWidth === 0 || box.offsetHeight === 0) return;
+          try { fitAddonExtra.fit(); sendResizeExtra(); } catch (e) {}
+        }, 100);
+      };
+      window.addEventListener('resize', refitExtra);
+      if (window.ResizeObserver) new ResizeObserver(refitExtra).observe(document.getElementById('xtermBoxExtra'));
+    }
+
+    function getActiveTerm() {
+      if (termMode === 'pty') return term;
+      if (termMode === 'exec' && currentExecSubView === 'ssh_plus') return termExtra;
+      return null;
+    }
+
+    function getActivePtyWs() {
+      if (termMode === 'pty') return ws;
+      if (termMode === 'exec' && currentExecSubView === 'ssh_plus') return wsExtra;
+      return null;
+    }
+
+    function updateAndroidKeyboardLockUI() {
+      const btn = document.getElementById('btnLockAndroidKeyboard');
+      if (btn) {
+        btn.classList.toggle('locked', isAndroidKeyboardLocked);
+        btn.textContent = isAndroidKeyboardLocked ? '🔒' : '🔓';
+        btn.title = isAndroidKeyboardLocked
+          ? 'Экранная клавиатура Android заблокирована (нажмите для разблокировки)'
+          : 'Заблокировать экранную клавиатуру Android';
+      }
+    }
+
+    function applyAndroidKeyboardLock() {
+      updateAndroidKeyboardLockUI();
+      const textareas = document.querySelectorAll('.xterm-helper-textarea');
+      textareas.forEach(ta => {
+        if (isAndroidKeyboardLocked) {
+          ta.setAttribute('inputmode', 'none');
+          ta.setAttribute('readonly', 'readonly');
+          ta.blur();
+        } else {
+          ta.removeAttribute('readonly');
+          ta.removeAttribute('inputmode');
+        }
+      });
+      if (isAndroidKeyboardLocked) {
+        if (navigator.virtualKeyboard && typeof navigator.virtualKeyboard.hide === 'function') {
+          try { navigator.virtualKeyboard.hide(); } catch (_) {}
         }
       }
-      termTranscript = '';
-      const logs = document.getElementById('terminalLogs');
-      if (logs) logs.textContent = '';
+    }
+
+    function toggleAndroidKeyboardLock() {
+      isAndroidKeyboardLocked = !isAndroidKeyboardLocked;
+      try {
+        localStorage.setItem('colab_android_kbd_locked', isAndroidKeyboardLocked ? 'true' : 'false');
+      } catch (_) {}
+      applyAndroidKeyboardLock();
+      const msg = isAndroidKeyboardLocked
+        ? 'Экранная клавиатура Android заблокирована'
+        : 'Экранная клавиатура Android разблокирована';
+      setStatus(isAndroidKeyboardLocked ? 'KEYBOARD LOCKED' : 'KEYBOARD UNLOCKED', isAndroidKeyboardLocked ? 'var(--amber)' : 'var(--cyan)');
+      showToast(msg);
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
+    }
+
+    document.addEventListener('focusin', (e) => {
+      if (isAndroidKeyboardLocked && e.target && e.target.classList && e.target.classList.contains('xterm-helper-textarea')) {
+        e.target.setAttribute('inputmode', 'none');
+        e.target.setAttribute('readonly', 'readonly');
+        if (navigator.virtualKeyboard && typeof navigator.virtualKeyboard.hide === 'function') {
+          try { navigator.virtualKeyboard.hide(); } catch (_) {}
+        }
+      }
+    }, true);
+
+    function clearTerminal() {
+      const curTerm = getActiveTerm();
+      if (curTerm) {
+        try { curTerm.clear(); curTerm.write('\x1b[2J\x1b[H'); } catch (e) {
+          try { curTerm.reset(); } catch (e2) {}
+        }
+      }
+      if (termMode === 'pty') {
+        termTranscript = '';
+      } else if (termMode === 'exec' && currentExecSubView === 'ssh_plus') {
+        termExtraTranscript = '';
+      } else {
+        termTranscript = '';
+        const logs = document.getElementById('terminalLogs');
+        if (logs) logs.textContent = '';
+      }
       const pan = document.getElementById('selectModePanel');
       if (pan) pan.textContent = '';
       setStatus('CLEARED', 'var(--text)');
@@ -2332,15 +2649,16 @@
     function blurIfButton() {
       try {
         const el = document.activeElement;
-        if (el && (el.classList.contains('pad-key') || el.classList.contains('term-scroll-btn'))) {
+        if (el && (el.classList.contains('pad-key') || el.classList.contains('term-scroll-btn') || el.classList.contains('arrows-pad-lock') || el.classList.contains('term-header-tab'))) {
           el.blur();
         }
       } catch (_) {}
     }
 
     function sendPtyEnter() {
-      if (termMode === 'pty' && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'stdin', data: '\r' }));
+      const activeWs = getActivePtyWs();
+      if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+        activeWs.send(JSON.stringify({ type: 'stdin', data: '\r' }));
         setStatus('ENTER SENT', 'var(--text)');
       } else {
         setStatus('PTY OFFLINE', 'var(--amber)');
@@ -2504,9 +2822,10 @@
     }
 
     function sendTerminalRaw(data) {
-      if (termMode === 'pty') {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'stdin', data }));
+      const activeWs = getActivePtyWs();
+      if (activeWs) {
+        if (activeWs.readyState === WebSocket.OPEN) {
+          activeWs.send(JSON.stringify({ type: 'stdin', data }));
           return true;
         } else {
           setStatus('PTY OFFLINE', 'var(--amber)');
@@ -2530,9 +2849,11 @@
         return;
       }
 
+      const curTerm = getActiveTerm();
+
       if (key === 'copy') {
-        if (term && term.hasSelection()) {
-          const sel = term.getSelection();
+        if (curTerm && curTerm.hasSelection()) {
+          const sel = curTerm.getSelection();
           navigator.clipboard.writeText(sel)
             .then(() => setStatus('COPIED SELECTION', 'var(--text)'))
             .catch(() => setStatus('COPY FAILED', 'var(--red)'));
@@ -2576,7 +2897,7 @@
       const isAlt = virtualAltActive;
       const mod = getXtermMod(isShift, isAlt, isCtrl);
       // Проверяем, включил ли mc / opencode режим Application Cursor Keys (DECCKM)
-      const appCursor = !!(term && term.modes && term.modes.applicationCursorKeysMode);
+      const appCursor = !!(curTerm && curTerm.modes && curTerm.modes.applicationCursorKeysMode);
 
       switch (key) {
         case 'up':
@@ -2698,7 +3019,7 @@
         return;
       }
 
-      if (termMode === 'exec') {
+      if (termMode === 'exec' && currentExecSubView !== 'ssh_plus') {
         const logs = document.getElementById('terminalLogs');
         if (!logs) return;
         const page = logs.clientHeight || 200;
@@ -2709,10 +3030,11 @@
         return;
       }
 
-      if (term) {
+      const curTerm = getActiveTerm();
+      if (curTerm) {
         try {
-          const isAltBuffer = !!(term.buffer && term.buffer.active && term.buffer.active.type === 'alternate');
-          const hasScrollback = !!(term.buffer && term.buffer.active && term.buffer.active.baseY > 0);
+          const isAltBuffer = !!(curTerm.buffer && curTerm.buffer.active && curTerm.buffer.active.type === 'alternate');
+          const hasScrollback = !!(curTerm.buffer && curTerm.buffer.active && curTerm.buffer.active.baseY > 0);
 
           // Если запущено TUI-приложение (opencode, mc, vim, less) или нет локального скроллбэка —
           // отправляем клавиши навигации в сам терминал
@@ -2725,17 +3047,17 @@
           }
 
           if (dir === 'home') {
-            if (typeof term.scrollToTop === 'function') term.scrollToTop();
-            else if (typeof term.scrollLines === 'function') term.scrollLines(-100000);
+            if (typeof curTerm.scrollToTop === 'function') curTerm.scrollToTop();
+            else if (typeof curTerm.scrollLines === 'function') curTerm.scrollLines(-100000);
           } else if (dir === 'end') {
-            if (typeof term.scrollToBottom === 'function') term.scrollToBottom();
-            else if (typeof term.scrollLines === 'function') term.scrollLines(100000);
+            if (typeof curTerm.scrollToBottom === 'function') curTerm.scrollToBottom();
+            else if (typeof curTerm.scrollLines === 'function') curTerm.scrollLines(100000);
           } else if (dir === 'pageup' || dir === 'up') {
-            if (typeof term.scrollPages === 'function') term.scrollPages(-1);
-            else if (typeof term.scrollLines === 'function') term.scrollLines(-(term.rows || 24));
+            if (typeof curTerm.scrollPages === 'function') curTerm.scrollPages(-1);
+            else if (typeof curTerm.scrollLines === 'function') curTerm.scrollLines(-(curTerm.rows || 24));
           } else if (dir === 'pagedown' || dir === 'down') {
-            if (typeof term.scrollPages === 'function') term.scrollPages(1);
-            else if (typeof term.scrollLines === 'function') term.scrollLines(term.rows || 24);
+            if (typeof curTerm.scrollPages === 'function') curTerm.scrollPages(1);
+            else if (typeof curTerm.scrollLines === 'function') curTerm.scrollLines(curTerm.rows || 24);
           }
         } catch (e) {
           console.warn('termScroll error', e);
@@ -2762,7 +3084,7 @@
       let origX = 0, origY = 0;
 
       handle.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('.arrows-pad-close')) return;
+        if (e.target.closest('.arrows-pad-close') || e.target.closest('.arrows-pad-lock')) return;
         isDragging = true;
         try { handle.setPointerCapture(e.pointerId); } catch (_) {}
         const rect = pad.getBoundingClientRect();
@@ -3171,10 +3493,11 @@
         if (typeof switchTab === 'function') switchTab('terminal', termNavBtn ? { target: termNavBtn } : null);
       }
 
-      if (termMode === 'pty') {
-        if (ws && ws.readyState === WebSocket.OPEN) {
+      const activePty = getActivePtyWs();
+      if (activePty) {
+        if (activePty.readyState === WebSocket.OPEN) {
           const ptyData = code.replace(/\r\n/g, '\r').replace(/\n/g, '\r') + '\r';
-          ws.send(JSON.stringify({ type: 'stdin', data: ptyData }));
+          activePty.send(JSON.stringify({ type: 'stdin', data: ptyData }));
           setStatus((label ? label.toUpperCase() : 'COMMAND') + ' SENT', 'var(--text)');
         } else {
           setStatus('PTY OFFLINE', 'var(--amber)');
@@ -3424,12 +3747,13 @@
       else selectMode = !selectMode;
       const bar = document.getElementById('selectModeBar');
       const xtermBox = document.getElementById('xtermBox');
+      const xtermBoxExtra = document.getElementById('xtermBoxExtra');
       const pan = document.getElementById('selectModePanel');
       const lineBox = document.getElementById('lineExecBox');
       if (selectMode) {
         bar.classList.add('on');
         if (termMode === 'pty') {
-          xtermBox.classList.add('hidden');
+          if (xtermBox) xtermBox.classList.add('hidden');
           pan.style.display = 'block';
           let text = stripAnsi(termTranscript);
           if (!text && term) {
@@ -3443,12 +3767,25 @@
               text = buf.join('\n');
             } catch (e) {}
           }
-          if (termMode === 'exec') {
-            text = document.getElementById('terminalLogs').textContent || text;
+          pan.textContent = text || '(empty)';
+        } else if (termMode === 'exec' && currentExecSubView === 'ssh_plus') {
+          if (xtermBoxExtra) xtermBoxExtra.style.display = 'none';
+          pan.style.display = 'block';
+          let text = stripAnsi(termExtraTranscript);
+          if (!text && termExtra) {
+            try {
+              const buf = [];
+              const len = termExtra.buffer.active.length;
+              for (let i = 0; i < len; i++) {
+                const line = termExtra.buffer.active.getLine(i);
+                if (line) buf.push(line.translateToString(true));
+              }
+              text = buf.join('\n');
+            } catch (e) {}
           }
           pan.textContent = text || '(empty)';
         } else {
-          xtermBox.classList.add('hidden');
+          if (xtermBox) xtermBox.classList.add('hidden');
           if (lineBox) lineBox.style.display = 'none';
           pan.style.display = 'block';
           pan.textContent = document.getElementById('terminalLogs').textContent || stripAnsi(termTranscript) || '(empty)';
@@ -3457,9 +3794,11 @@
         bar.classList.remove('on');
         pan.style.display = 'none';
         if (termMode === 'pty') {
-          xtermBox.classList.remove('hidden');
+          if (xtermBox) xtermBox.classList.remove('hidden');
+        } else if (termMode === 'exec' && currentExecSubView === 'ssh_plus') {
+          if (xtermBoxExtra) xtermBoxExtra.style.display = 'block';
         } else {
-          xtermBox.classList.add('hidden');
+          if (xtermBox) xtermBox.classList.add('hidden');
           if (lineBox) {
             lineBox.style.display = '';
             lineBox.classList.add('visible');
@@ -3467,6 +3806,8 @@
         }
         if (termMode === 'pty' && fitAddon) {
           setTimeout(() => { try { fitAddon.fit(); sendResize(); } catch (e) {} }, 50);
+        } else if (termMode === 'exec' && currentExecSubView === 'ssh_plus' && fitAddonExtra) {
+          setTimeout(() => { try { fitAddonExtra.fit(); sendResizeExtra(); } catch (e) {} }, 50);
         }
       }
     }
@@ -3492,25 +3833,47 @@
       ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
     }
     function disconnectTerm() {
-      if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
-      if (window._ptyPingTimer) { clearInterval(window._ptyPingTimer); window._ptyPingTimer = null; }
-      if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; }
-      setStatus('OFFLINE', 'var(--red)');
+      if (termMode === 'pty') {
+        if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+        if (window._ptyPingTimer) { clearInterval(window._ptyPingTimer); window._ptyPingTimer = null; }
+        if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; }
+        setStatus('OFFLINE', 'var(--red)');
+      } else if (termMode === 'exec' && currentExecSubView === 'ssh_plus') {
+        if (wsExtraRetryTimer) { clearTimeout(wsExtraRetryTimer); wsExtraRetryTimer = null; }
+        if (window._ptyExtraPingTimer) { clearInterval(window._ptyExtraPingTimer); window._ptyExtraPingTimer = null; }
+        if (wsExtra) { try { wsExtra.onclose = null; wsExtra.close(); } catch (e) {} wsExtra = null; }
+        setStatus('SSH+ OFFLINE', 'var(--red)');
+      } else {
+        if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+        if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; }
+        setStatus('LINE-EXEC OFFLINE', 'var(--red)');
+      }
     }
     function killShell() {
-      if (!confirm('Kill the running shell (agy and everything started in it will stop)?')) return;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        try { ws.send(JSON.stringify({ type: 'kill' })); } catch (e) {}
+      const isExtra = (termMode === 'exec' && currentExecSubView === 'ssh_plus');
+      const targetName = isExtra ? 'SSH+ secondary shell' : 'running shell';
+      if (!confirm(`Kill the ${targetName} (agy and everything started in it will stop)?`)) return;
+      const targetWs = isExtra ? wsExtra : ws;
+      if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+        try { targetWs.send(JSON.stringify({ type: 'kill' })); } catch (e) {}
       } else {
         setStatus('PTY OFFLINE', 'var(--amber)');
       }
     }
     function reconnectTerm() {
       disconnectTerm();
-      ptyNoRetry = false;
-      reconnectAttempts = 0;
-      if (termMode === 'pty') connectPty();
-      else connectLineExec();
+      if (termMode === 'pty') {
+        ptyNoRetry = false;
+        reconnectAttempts = 0;
+        connectPty();
+      } else if (termMode === 'exec' && currentExecSubView === 'ssh_plus') {
+        ptyExtraNoRetry = false;
+        reconnectExtraAttempts = 0;
+        connectPtyExtra();
+      } else {
+        reconnectAttempts = 0;
+        connectLineExec();
+      }
     }
     function scheduleReconnect() {
       if (wsRetryTimer) clearTimeout(wsRetryTimer);
@@ -3520,11 +3883,30 @@
         if (termMode === 'pty' && !document.hidden && !ptyNoRetry) connectPty();
       }, delay);
     }
+    function scheduleReconnectExtra() {
+      if (wsExtraRetryTimer) clearTimeout(wsExtraRetryTimer);
+      const delay = Math.min(30000, 2000 * Math.pow(2, reconnectExtraAttempts++));
+      wsExtraRetryTimer = setTimeout(() => {
+        wsExtraRetryTimer = null;
+        if (termMode === 'exec' && currentExecSubView === 'ssh_plus' && !document.hidden && !ptyExtraNoRetry) connectPtyExtra();
+      }, delay);
+    }
+    function sendResizeExtra() {
+      if (!termExtra || !wsExtra || wsExtra.readyState !== WebSocket.OPEN || termMode !== 'exec' || currentExecSubView !== 'ssh_plus') return;
+      wsExtra.send(JSON.stringify({ type: 'resize', cols: termExtra.cols, rows: termExtra.rows }));
+    }
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden || termMode !== 'pty' || !activeSession || ptyNoRetry) return;
-      if (!ws || ws.readyState > 1) {
-        if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
-        connectPty();
+      if (document.hidden || !activeSession) return;
+      if (termMode === 'pty' && !ptyNoRetry) {
+        if (!ws || ws.readyState > 1) {
+          if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+          connectPty();
+        }
+      } else if (termMode === 'exec' && currentExecSubView === 'ssh_plus' && !ptyExtraNoRetry) {
+        if (!wsExtra || wsExtra.readyState > 1) {
+          if (wsExtraRetryTimer) { clearTimeout(wsExtraRetryTimer); wsExtraRetryTimer = null; }
+          connectPtyExtra();
+        }
       }
     });
     function connectPty() {
@@ -3596,6 +3978,82 @@
         scheduleReconnect();
       };
       sock.onerror = () => { if (ws === sock) setStatus('WS ERROR', 'var(--red)'); };
+    }
+    function connectPtyExtra() {
+      initXtermExtra();
+      if (!activeSession) {
+        if (currentExecSubView === 'ssh_plus') setStatus('NO SESSION', 'var(--amber)');
+        termExtra.writeln('\x1b[33mNo session selected. SESSIONS → [CREATE] or [USE].\x1b[0m');
+        return;
+      }
+      ptyExtraNoRetry = false;
+      const wurl = wsUrlFor('/pty', { cols: String(termExtra.cols || 80), rows: String(termExtra.rows || 24), mode: 'ssh', sid: termSidExtra });
+      if (currentExecSubView === 'ssh_plus') setStatus('CONNECTING…', 'var(--amber)');
+      termExtra.writeln('\x1b[90mSSH+ ' + wurl.replace(/api_key=[^&]+/, 'api_key=***') + '\x1b[0m');
+      const sock = new WebSocket(wurl);
+      wsExtra = sock;
+      sock.onopen = () => {
+        if (wsExtra !== sock) return;
+        if (currentExecSubView === 'ssh_plus') setStatus('SSH+ ONLINE', 'var(--text)');
+        sendResizeExtra();
+        if (window._ptyExtraPingTimer) clearInterval(window._ptyExtraPingTimer);
+        window._ptyExtraPingTimer = setInterval(() => {
+          if (wsExtra === sock && sock.readyState === WebSocket.OPEN) {
+            try { sock.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch (e) {}
+          }
+        }, 25000);
+      };
+      sock.onmessage = (ev) => {
+        if (wsExtra !== sock) return;
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (e) {
+          termExtra.write(ev.data);
+          termExtraTranscript += ev.data;
+          return;
+        }
+        if (msg.type === 'ping' || msg.type === 'pong') return;
+        if (msg.type === 'stdout') {
+          const d = msg.data || '';
+          termExtra.write(d);
+          termExtraTranscript += d;
+        } else if (msg.type === 'ready') {
+          reconnectExtraAttempts = 0;
+          if (msg.data && msg.data.attached) {
+            try { termExtra.reset(); } catch (e) {}
+            termExtraTranscript = '';
+            sendResizeExtra();
+            return;
+          }
+          termExtra.writeln('\x1b[32m[ssh+ ready]\x1b[0m');
+          termExtraTranscript += '[ssh+ ready]\n';
+          sendResizeExtra();
+        } else if (msg.type === 'error') {
+          ptyExtraNoRetry = true;
+          termExtra.writeln('\x1b[31m[error] ' + (msg.data || '') + '\x1b[0m');
+          termExtraTranscript += '[error] ' + (msg.data || '') + '\n';
+          if (currentExecSubView === 'ssh_plus') setStatus('ERROR', 'var(--red)');
+        } else if (msg.type === 'exit') {
+          ptyExtraNoRetry = true;
+          termExtra.writeln('\r\n\x1b[90m[exit ' + msg.exitCode + '] press [RECONNECT] to open a new shell\x1b[0m');
+          termExtraTranscript += '\n[exit ' + msg.exitCode + ']\n';
+          if (currentExecSubView === 'ssh_plus') setStatus('EXITED', 'var(--amber)');
+        }
+      };
+      sock.onclose = (ev) => {
+        if (wsExtra !== sock) return;
+        if (window._ptyExtraPingTimer) { clearInterval(window._ptyExtraPingTimer); window._ptyExtraPingTimer = null; }
+        if (ev && ev.code === 4000) {
+          ptyExtraNoRetry = true;
+          if (currentExecSubView === 'ssh_plus') setStatus('OPENED ELSEWHERE — [RECONNECT]', 'var(--amber)');
+          return;
+        }
+        if (ptyExtraNoRetry) return;
+        if (currentExecSubView === 'ssh_plus') setStatus('DISCONNECTED', 'var(--red)');
+        scheduleReconnectExtra();
+      };
+      sock.onerror = () => {
+        if (wsExtra === sock && currentExecSubView === 'ssh_plus') setStatus('WS ERROR', 'var(--red)');
+      };
     }
     function connectLineExec() {
       const wurl = wsUrlFor('/terminal', {});
@@ -3754,6 +4212,10 @@
     function selectSession(name) {
       activeSession = name;
       localStorage.setItem('colab_active_session', name);
+      if (wsExtra) {
+        try { wsExtra.onclose = null; wsExtra.close(); } catch (_) {}
+        wsExtra = null;
+      }
       updateSessionLabel();
       reconnectTerm();
     }
@@ -4066,14 +4528,6 @@
           openBtn.style.marginLeft = '6px';
           openBtn.onclick = () => openExtModal(u);
           row.appendChild(openBtn);
-          const closeBtn = document.createElement('button');
-          closeBtn.className = 'btn btn-danger';
-          closeBtn.type = 'button';
-          closeBtn.textContent = '[✕ ЗАКРЫТЬ]';
-          closeBtn.style.marginTop = '4px';
-          closeBtn.style.marginLeft = '6px';
-          closeBtn.onclick = () => { log.innerHTML = '—'; log.className = 'log-box'; };
-          row.appendChild(closeBtn);
           log.appendChild(row);
         });
       } else {
@@ -4235,14 +4689,6 @@
           btn.onclick = () => openExtModal(url);
           log.appendChild(document.createElement('br'));
           log.appendChild(btn);
-          const closeBtn = document.createElement('button');
-          closeBtn.className = 'btn btn-danger';
-          closeBtn.type = 'button';
-          closeBtn.style.marginTop = '8px';
-          closeBtn.style.marginLeft = '6px';
-          closeBtn.textContent = '[✕ ЗАКРЫТЬ]';
-          closeBtn.onclick = () => { log.innerHTML = '—'; log.className = 'log-box'; };
-          log.appendChild(closeBtn);
           openExtModal(url);
         } else {
           pre.textContent += '\n\n' + JSON.stringify(d, null, 2);
@@ -4900,8 +5346,14 @@
         if (typeof fitAddon !== 'undefined' && fitAddon) {
           try { fitAddon.fit(); } catch (_) {}
         }
+        if (typeof fitAddonExtra !== 'undefined' && fitAddonExtra && currentExecSubView === 'ssh_plus') {
+          try { fitAddonExtra.fit(); } catch (_) {}
+        }
         if (typeof term !== 'undefined' && term) {
           try { term.refresh(0, term.rows - 1); } catch (_) {}
+        }
+        if (typeof termExtra !== 'undefined' && termExtra && currentExecSubView === 'ssh_plus') {
+          try { termExtra.refresh(0, termExtra.rows - 1); } catch (_) {}
         }
       }, 60);
     }
@@ -5076,6 +5528,18 @@
             console.warn('Ошибка применения шрифта к xterm:', e);
           }
         }
+        if (termExtra) {
+          try {
+            termExtra.options.fontSize = size;
+            termExtra.options.fontFamily = FONT_FAMILIES[font];
+            if (fitAddonExtra) {
+              fitAddonExtra.fit();
+              sendResizeExtra();
+            }
+          } catch (e) {
+            console.warn('Ошибка применения шрифта к xtermExtra:', e);
+          }
+        }
       }
 
       let savedSettings = {};
@@ -5129,7 +5593,11 @@
     updateSessionLabel();
     loadConnectionCfgIntoForm();
     loadAutoInstallConfig();
+    updateAndroidKeyboardLockUI();
     setTermMode(termMode);
+    if (termMode === 'exec') {
+      renderExecSubView();
+    }
     checkAuth();
     restoreDriveJob();
   </script>
