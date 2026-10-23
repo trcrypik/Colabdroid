@@ -409,6 +409,47 @@
     .fm-table .name { color: var(--text); cursor: pointer; }
     .fm-table .name:not(.dir):hover { text-decoration: underline; color: #fff; }
     .fm-table .dir { color: var(--cyan); }
+    .fm-table tr.fm-row-selected td { background: rgba(0, 255, 102, 0.09); }
+    .fm-th-check {
+      display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+      color: var(--cyan); font-size: var(--ui-header-font-size);
+    }
+    .fm-check {
+      -webkit-appearance: none; appearance: none;
+      width: 15px; height: 15px; margin: 0; padding: 0; flex-shrink: 0;
+      display: inline-block; position: relative; vertical-align: middle;
+      background: #050608; border: 1px solid var(--border); border-radius: 2px;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+      transition: all 0.12s ease;
+    }
+    .fm-check:hover { border-color: var(--cyan); box-shadow: 0 0 6px rgba(0, 240, 255, 0.25); }
+    .fm-check:checked {
+      background: rgba(0, 255, 102, 0.18); border-color: var(--text);
+      box-shadow: 0 0 6px rgba(0, 255, 102, 0.25);
+    }
+    .fm-check:checked::after {
+      content: ''; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px;
+      border: solid var(--text); border-width: 0 2px 2px 0; transform: rotate(45deg);
+    }
+    .fm-check:indeterminate { border-color: var(--text); background: rgba(0, 255, 102, 0.10); }
+    .fm-check:indeterminate::after {
+      content: ''; position: absolute; left: 3px; top: 6px; width: 7px; height: 2px;
+      background: var(--text);
+    }
+    .fm-check-cell {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; margin-right: 4px; vertical-align: middle;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .fm-sel-bar {
+      display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+      padding: 6px 0; margin-bottom: 4px;
+    }
+    .fm-sel-bar .fm-sel-count {
+      color: var(--cyan); font-size: calc(var(--ui-font-size) - 2px); letter-spacing: 0.5px;
+    }
+    .fm-menu-item.fm-menu-run { color: var(--text); border-color: rgba(0, 255, 102, 0.45); }
+    .fm-menu-item.fm-menu-run:hover { border-color: var(--text); background: rgba(0, 255, 102, 0.18); }
     .app-toast {
       position: fixed; bottom: 24px; right: 24px;
       background: #090d14; border: 1px solid var(--text); color: var(--text);
@@ -1581,9 +1622,25 @@
           <input type="file" id="fmUploadInput" style="opacity:0;position:absolute;width:1px;height:1px;pointer-events:none;top:0;left:0;" onchange="fmUpload(event)" />
         </div>
         <div id="fmLog" class="log-box">Select a session first, then browse /content.</div>
+        <div id="fmSelBar" class="fm-sel-bar" style="display:none;">
+          <span class="fm-sel-count" id="fmSelCount">0 SELECTED</span>
+          <button class="btn" type="button" onclick="fmBulkCopyPaths()" title="Copy selected paths to clipboard">[COPY_PATHS]</button>
+          <button class="btn" type="button" id="fmSelDownloadBtn" onclick="fmBulkDownload()" title="Download selected files">[DOWNLOAD]</button>
+          <button class="btn btn-danger" type="button" onclick="fmBulkDelete()" title="Delete selected files and folders">[DELETE]</button>
+          <button class="btn" type="button" onclick="fmClearSelection()" title="Clear selection">[CLEAR]</button>
+        </div>
         <div style="overflow-x:auto;">
           <table class="fm-table">
-            <thead><tr><th>NAME</th><th>SIZE</th><th style="min-width:48px;">ACTIONS</th></tr></thead>
+            <thead><tr>
+              <th>NAME</th>
+              <th>SIZE</th>
+              <th style="min-width:84px;">
+                <label class="fm-th-check" title="Select / deselect all">
+                  <input type="checkbox" id="fmSelectAll" class="fm-check" onchange="fmToggleSelectAll(this.checked)" aria-label="Select all" />
+                  <span>ACTIONS</span>
+                </label>
+              </th>
+            </tr></thead>
             <tbody id="fmBody"></tbody>
           </table>
         </div>
@@ -1887,6 +1944,9 @@
     let lastPtyExtraStatus = '', lastPtyExtraStatusColor = '';
     let lastExecStatus = '', lastExecStatusColor = '';
     let fmPath = '/content';
+    let fmSelection = new Map();
+    let fmSelectionPath = null;
+    let fmLastEntries = [];
     let termTranscript = '';
     let selectMode = false;
     let ptyNoRetry = false;
@@ -2367,9 +2427,10 @@
     }
 
     function switchTab(name, ev) {
-      if (ev && ev.target) {
+      const targetBtn = (ev && ev.target) || document.querySelector('.tab-btn[onclick*="switchTab(\'' + name + '\'"]');
+      if (targetBtn) {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        ev.target.classList.add('active');
+        targetBtn.classList.add('active');
       }
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       const activeEl = document.getElementById('tab-' + name);
@@ -5000,6 +5061,8 @@
       const body = document.getElementById('fmBody');
       const log = document.getElementById('fmLog');
       body.innerHTML = '<tr><td colspan="3">Loading…</td></tr>';
+      fmLastEntries = [];
+      fmUpdateSelBar();
       if (!activeSession) {
         log.className = 'log-box err';
         log.textContent = 'Select a session ([USE]) first.';
@@ -5015,8 +5078,14 @@
           log.textContent = d.error || d.output || d.raw || 'List failed';
           return;
         }
+        const entries = sortFmEntries(d.entries || []);
+        fmLastEntries = entries;
+        if (fmSelectionPath !== fmPath) {
+          fmSelectionPath = fmPath;
+          fmSelection.clear();
+        }
         log.className = 'log-box ok';
-        log.textContent = 'Path: ' + (d.path || fmPath) + ' · ' + (d.entries || []).length + ' items';
+        log.textContent = 'Path: ' + (d.path || fmPath) + ' · ' + entries.length + ' items';
         if (fmPath !== '/' && fmPath !== '') {
           const parent = parentPath(fmPath);
           const tr = document.createElement('tr');
@@ -5025,7 +5094,7 @@
           tr.oncontextmenu = (ev) => copyFilePath(ev, parent, tr);
           body.appendChild(tr);
         }
-        (d.entries || []).forEach(ent => {
+        entries.forEach(ent => {
           const tr = document.createElement('tr');
           const isDir = !!ent.is_dir;
           const nameSpan = isDir
@@ -5042,13 +5111,25 @@
           tr.innerHTML =
             '<td>' + nameSpan + '</td>' +
             '<td>' + (isDir ? 'DIR' : fmtSize(ent.size)) + '</td>' +
-            '<td style="white-space:nowrap;">' + actionsBtn + '</td>';
+            '<td style="white-space:nowrap;">' +
+              '<label class="fm-check-cell"><input type="checkbox" class="fm-check" aria-label="Select ' + escAttr(ent.name) + '" /></label>' +
+              actionsBtn +
+            '</td>';
+          const chk = tr.querySelector('.fm-check');
+          if (chk) {
+            chk.dataset.path = ent.path;
+            chk.checked = fmSelection.has(ent.path);
+            chk.onclick = (ev) => ev.stopPropagation();
+            chk.onchange = () => fmToggleSelect(ent.path, isDir, chk.checked);
+          }
+          if (chk && chk.checked) tr.classList.add('fm-row-selected');
           const btn = tr.querySelector('.fm-actions-btn');
           if (btn) btn.onclick = (ev) => fmToggleRowMenu(ev, btn, ent.path, isDir);
           tr.oncontextmenu = (ev) => copyFilePath(ev, ent.path, tr);
           body.appendChild(tr);
         });
-        if (!(d.entries || []).length && d.output) {
+        fmUpdateSelBar();
+        if (!entries.length && d.output) {
           log.textContent += '\n' + d.output;
         }
       } catch (e) {
@@ -5057,6 +5138,225 @@
         body.innerHTML = '';
       }
     }
+
+    /* ---------- Sorting: folders first, then files (natural name order) ---------- */
+    function sortFmEntries(entries) {
+      return entries.slice().sort((a, b) => {
+        const ad = (a && (a.is_dir === true || a.is_dir === 1 || a.is_dir === 'true')) ? 0 : 1;
+        const bd = (b && (b.is_dir === true || b.is_dir === 1 || b.is_dir === 'true')) ? 0 : 1;
+        if (ad !== bd) return ad - bd;
+        return String((a && a.name) || '').localeCompare(String((b && b.name) || ''), undefined, { numeric: true, sensitivity: 'base' });
+      });
+    }
+
+    /* ---------- Multi-select (checkboxes) + bulk operations ---------- */
+    function fmToggleSelect(remotePath, isDir, on) {
+      if (on) fmSelection.set(remotePath, !!isDir);
+      else fmSelection.delete(remotePath);
+      fmUpdateSelBar();
+    }
+
+    function fmToggleSelectAll(on) {
+      fmLastEntries.forEach(ent => {
+        if (on) fmSelection.set(ent.path, !!ent.is_dir);
+        else fmSelection.delete(ent.path);
+      });
+      fmUpdateSelBar();
+    }
+
+    function fmClearSelection() {
+      fmSelection.clear();
+      fmUpdateSelBar();
+    }
+
+    function fmUpdateSelBar() {
+      const bar = document.getElementById('fmSelBar');
+      const cnt = document.getElementById('fmSelCount');
+      const n = fmSelection.size;
+      if (bar) bar.style.display = n ? 'flex' : 'none';
+      if (cnt) cnt.textContent = n + ' SELECTED';
+
+      let selVisible = 0;
+      fmLastEntries.forEach(ent => { if (fmSelection.has(ent.path)) selVisible++; });
+      const all = document.getElementById('fmSelectAll');
+      if (all) {
+        all.checked = fmLastEntries.length > 0 && selVisible === fmLastEntries.length;
+        all.indeterminate = selVisible > 0 && selVisible < fmLastEntries.length;
+        all.disabled = fmLastEntries.length === 0;
+      }
+
+      document.querySelectorAll('#fmBody tr').forEach(tr => {
+        const chk = tr.querySelector('.fm-check');
+        if (!chk || !chk.dataset.path) return;
+        const on = fmSelection.has(chk.dataset.path);
+        chk.checked = on;
+        tr.classList.toggle('fm-row-selected', on);
+      });
+
+      const dl = document.getElementById('fmSelDownloadBtn');
+      if (dl) {
+        let hasFile = false;
+        fmSelection.forEach(isDir => { if (!isDir) hasFile = true; });
+        dl.disabled = !hasFile;
+      }
+    }
+
+    function fmBulkCopyPaths() {
+      const paths = Array.from(fmSelection.keys());
+      if (!paths.length) return;
+      const log = document.getElementById('fmLog');
+      copyToClipboard(paths.join('\n')).then(() => {
+        log.className = 'log-box ok';
+        log.textContent = 'COPIED ' + paths.length + ' PATH(S)';
+        showToast('✓ Copied ' + paths.length + ' path(s)');
+      });
+    }
+
+    async function fmBulkDownload() {
+      const files = [];
+      fmSelection.forEach((isDir, p) => { if (!isDir) files.push(p); });
+      const skipped = fmSelection.size - files.length;
+      const log = document.getElementById('fmLog');
+      if (!files.length) {
+        log.className = 'log-box err';
+        log.textContent = 'Nothing to download — folders are skipped.';
+        return;
+      }
+      log.className = 'log-box';
+      log.textContent = 'Downloading ' + files.length + ' file(s)…' +
+        (skipped ? ' (' + skipped + ' folder(s) skipped)' : '');
+      let ok = 0;
+      for (const p of files) {
+        try {
+          const q = '?path=' + encodeURIComponent(p) +
+            (activeSession ? '&session=' + encodeURIComponent(activeSession) : '');
+          const r = await apiFetch('/api/files/download' + q);
+          if (!r.ok) continue;
+          const blob = await r.blob();
+          const a = document.createElement('a');
+          const href = URL.createObjectURL(blob);
+          a.href = href;
+          a.download = p.split('/').pop() || 'download';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(href), 5000);
+          ok++;
+          await new Promise(res => setTimeout(res, 350));
+        } catch (e) {}
+      }
+      log.className = ok ? 'log-box ok' : 'log-box err';
+      log.textContent = 'Downloaded ' + ok + ' of ' + files.length + ' file(s)' +
+        (skipped ? ' · ' + skipped + ' folder(s) skipped' : '');
+      showToast((ok ? '✓ ' : '⚠ ') + ok + '/' + files.length + ' downloaded');
+    }
+
+    async function fmBulkDelete() {
+      const items = Array.from(fmSelection.entries());
+      if (!items.length) return;
+      if (!confirm('Delete ' + items.length + ' selected item(s)? This cannot be undone.')) return;
+      const log = document.getElementById('fmLog');
+      log.className = 'log-box';
+      log.textContent = 'Deleting ' + items.length + ' item(s)…';
+      let ok = 0;
+      const failed = [];
+      for (const [p] of items) {
+        const res = await fmDeleteRemote(p);
+        if (res.ok) ok++;
+        else failed.push(p + ' — ' + res.error);
+      }
+      fmSelection.clear();
+      log.className = failed.length ? 'log-box err' : 'log-box ok';
+      log.textContent = 'DELETED ' + ok + ' of ' + items.length + ' item(s)' +
+        (failed.length ? '\n' + failed.join('\n') : '');
+      showToast((failed.length ? '⚠ ' : '✓ ') + ok + '/' + items.length + ' deleted');
+      fmList();
+    }
+
+    /* ---------- RUN: execute script files in the SSH tab ---------- */
+    const FM_RUNNERS = {
+      sh: 'bash', bash: 'bash', zsh: 'zsh', ksh: 'ksh',
+      py: 'python3', pyw: 'python3',
+      js: 'node', mjs: 'node', cjs: 'node',
+      rb: 'ruby', pl: 'perl', php: 'php', lua: 'lua',
+      r: 'Rscript', jl: 'julia', tcl: 'tclsh'
+    };
+
+    function fmFileExt(p) {
+      const name = String(p || '').split('/').pop() || '';
+      const i = name.lastIndexOf('.');
+      return i > 0 ? name.slice(i + 1).toLowerCase() : '';
+    }
+
+    function fmIsRunnable(p) {
+      return !!FM_RUNNERS[fmFileExt(p)];
+    }
+
+    function fmShellQuote(s) {
+      return "'" + String(s).replace(/'/g, "'\\''") + "'";
+    }
+
+    function fmRunCommandFor(p) {
+      const runner = FM_RUNNERS[fmFileExt(p)];
+      if (!runner) return '';
+      const dir = parentPath(p);
+      const name = String(p).split('/').pop() || p;
+      return 'cd ' + fmShellQuote(dir) + ' && ' + runner + ' ' + fmShellQuote(name);
+    }
+
+    function fmRunFile(remotePath) {
+      const cmd = fmRunCommandFor(remotePath);
+      if (!cmd) return;
+      const log = document.getElementById('fmLog');
+      if (!activeSession) {
+        log.className = 'log-box err';
+        log.textContent = 'Select a session ([USE]) first — then RUN.';
+        showToast('⚠ Select a session first');
+        return;
+      }
+
+      if (typeof switchTab === 'function') switchTab('terminal');
+      if (termMode !== 'pty') {
+        setTermMode('pty');
+      } else if (!ws || ws.readyState > 1) {
+        connectPty();
+      }
+
+      log.className = 'log-box ok';
+      log.textContent = 'RUN → ' + cmd;
+      showToast('▶ RUN: ' + (remotePath.split('/').pop() || remotePath));
+
+      let attempts = 0;
+      const wasOpen = ws && ws.readyState === WebSocket.OPEN;
+      const trySend = () => {
+        if (termMode !== 'pty') return;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          const sendNow = () => {
+            try {
+              ws.send(JSON.stringify({ type: 'stdin', data: cmd + '\r' }));
+              setStatus('RUN SENT', 'var(--text)');
+            } catch (e) {
+              setStatus('RUN FAILED', 'var(--red)');
+            }
+            setTimeout(() => { try { if (term) term.focus(); } catch (_) {} }, 150);
+          };
+          if (!wasOpen && attempts < 3) {
+            setTimeout(sendNow, 500);
+          } else {
+            sendNow();
+          }
+          return;
+        }
+        if (attempts++ > 80) {
+          setStatus('PTY OFFLINE', 'var(--amber)');
+          showToast('⚠ SSH is not connected');
+          return;
+        }
+        setTimeout(trySend, 150);
+      };
+      setTimeout(trySend, wasOpen ? 80 : 300);
+    }
+
     function fmNavigate(p) {
       document.getElementById('fmPath').value = p;
       fmList();
@@ -5092,7 +5392,8 @@
         download: '<path d="M12 3v12"></path><polyline points="7 11 12 16 17 11"></polyline><path d="M4 20h16"></path>',
         rename: '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>',
         move: '<polyline points="5 9 2 12 5 15"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line>',
-        del: '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path>'
+        del: '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path>',
+        run: '<polygon points="6 4 20 12 6 20 6 4"></polygon>'
       };
       return '<span class="fm-menu-ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         (svgs[kind] || '') + '</svg></span>';
@@ -5129,6 +5430,10 @@
       fmCloseRowMenu();
       menu.innerHTML = '';
 
+      if (!isDir && fmIsRunnable(remotePath)) {
+        fmAddMenuItem(menu, 'RUN', 'run', 'fm-menu-run', () => fmRunFile(remotePath));
+        fmAddMenuSeparator(menu);
+      }
       fmAddMenuItem(menu, 'COPY PATH', 'copy', '', () => copyFilePath(null, remotePath, btn));
       fmAddMenuSeparator(menu);
       if (isDir) {
@@ -5299,15 +5604,7 @@
       }
     }
 
-    async function fmDelete(remotePath, isDir) {
-      const name = remotePath.split('/').pop() || remotePath;
-      const msg = 'Delete ' + (isDir ? 'directory and all its contents: ' : 'file: ') + name + '?';
-      if (!confirm(msg)) return;
-
-      const log = document.getElementById('fmLog');
-      log.className = 'log-box';
-      log.textContent = 'Deleting ' + remotePath + ' …';
-
+    async function fmDeleteRemote(remotePath) {
       try {
         const r = await apiFetch('/api/files/delete', {
           method: 'POST',
@@ -5326,18 +5623,31 @@
           });
           d = await fb.json();
         }
-        if (d && (d.success || d.ok)) {
-          log.className = 'log-box ok';
-          log.textContent = 'DELETED: ' + remotePath;
-          showToast('✓ Deleted: ' + name);
-          fmList();
-        } else {
-          log.className = 'log-box err';
-          log.textContent = 'Delete failed: ' + (d && (d.error || d.output || d.stderr) || 'Unknown error');
-        }
+        const ok = !!(d && (d.success || d.ok));
+        return { ok, error: (d && (d.error || d.output || d.stderr)) || 'Unknown error' };
       } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    }
+
+    async function fmDelete(remotePath, isDir) {
+      const name = remotePath.split('/').pop() || remotePath;
+      const msg = 'Delete ' + (isDir ? 'directory and all its contents: ' : 'file: ') + name + '?';
+      if (!confirm(msg)) return;
+
+      const log = document.getElementById('fmLog');
+      log.className = 'log-box';
+      log.textContent = 'Deleting ' + remotePath + ' …';
+
+      const res = await fmDeleteRemote(remotePath);
+      if (res.ok) {
+        log.className = 'log-box ok';
+        log.textContent = 'DELETED: ' + remotePath;
+        showToast('✓ Deleted: ' + name);
+        fmList();
+      } else {
         log.className = 'log-box err';
-        log.textContent = 'Delete error: ' + e.message;
+        log.textContent = 'Delete failed: ' + res.error;
       }
     }
 
