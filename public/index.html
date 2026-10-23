@@ -1340,8 +1340,8 @@
     <!-- TERMINAL -->
     <div id="tab-terminal" class="tab-content active">
       <div class="term-toolbar">
-        <button class="btn active-mode" id="btnModePty" type="button" onclick="setTermMode('pty')">[SSH/SHELL]</button>
-        <button class="btn" id="btnModeExec" type="button" onclick="setTermMode('exec')">[LINE-EXEC]</button>
+        <button class="btn active-mode" id="btnModePty" type="button" onclick="setTermMode('pty')">[SSH]</button>
+        <button class="btn" id="btnModeExec" type="button" onclick="setTermMode('exec')">[EXEC]</button>
         <div class="connect-dropdown" id="connectDropdown">
           <button class="btn btn-cyan dropdown-toggle" id="btnConnectMenu" type="button" onclick="toggleConnectMenu(event)" title="Connection actions: Reconnect, Disconnect, Kill shell">
             [CONNECT ▾]
@@ -1354,7 +1354,7 @@
         </div>
         <button class="btn btn-cyan" id="btnArrowsToggle" type="button" onclick="toggleArrowsPanel()" title="Toggle Virtual Arrow & Function Keypad">[KEYPAD]</button>
         <button class="btn btn-cyan" id="btnCommandsToggle" type="button" onclick="toggleCommandsPanel()" title="Toggle Command & Script Templates">[COMMANDS]</button>
-        <button class="btn btn-cyan" type="button" onclick="toggleSelectMode()">[SELECT_TEXT]</button>
+        <button class="btn btn-cyan" type="button" onclick="toggleSelectMode()">[✎]</button>
       </div>
       <div id="selectModeBar" style="display:none;flex-shrink:0;gap:8px;align-items:center;flex-wrap:wrap;">
         <span class="hint" style="color:var(--cyan);">SELECT MODE — drag handles work on text below. [COPY_ALL] or long-press.</span>
@@ -1375,44 +1375,44 @@
             </button>
             <span id="termHeaderTitle">SSH</span>
             <div id="execHeaderNav" style="display:none;align-items:center;gap:4px;">
-              <button type="button" class="term-header-tab active-header-tab" id="btnHdrLineExec" onclick="switchExecSubView('exec')" title="Вернуться в LINE-EXEC">LINE-EXEC</button>
+              <button type="button" class="term-header-tab active-header-tab" id="btnHdrLineExec" onclick="switchExecSubView('exec')" title="Вернуться в LINE-EXEC">EXEC</button>
               <button type="button" class="term-header-tab" id="btnHdrSshPlus" onclick="switchExecSubView('ssh_plus')" title="Открыть окно SSH+ (tmux)">[SSH+]</button>
               <div class="tmux-dropdown" id="tmuxCtrlBDropdown" style="display:none;">
                 <button type="button" class="term-header-tab" id="btnHdrCtrlB" onclick="handleCtrlBClick(event)" title="Послать Ctrl+B в tmux и открыть меню горячих клавиш">[CTRL+B]</button>
                 <div class="tmux-dropdown-menu" id="tmuxCtrlBMenu" style="display:none;">
-                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('&amp;', 'CLOSE WINDOW (&amp;)')">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('&amp;', 'CLOSE (&amp;)')">
                     <span>Закрыть окно</span>
                     <span class="key-badge">[&amp;]</span>
                   </button>
-                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('c', 'NEW WINDOW (c)')">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('c', 'NEW (c)')">
                     <span>Новое окно</span>
                     <span class="key-badge">[c]</span>
                   </button>
-                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('n', 'NEXT WINDOW (n)')">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('n', 'NEXT (n)')">
                     <span>След. окно</span>
                     <span class="key-badge">[n]</span>
                   </button>
-                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('p', 'PREV WINDOW (p)')">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('p', 'PREV (p)')">
                     <span>Пред. окно</span>
                     <span class="key-badge">[p]</span>
                   </button>
-                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('w', 'WINDOW LIST (w)')">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('w', 'LIST (w)')">
                     <span>Список окон</span>
                     <span class="key-badge">[w]</span>
                   </button>
-                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('%', 'SPLIT VERTICAL (%)')">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('%', 'SPLIT V (%)')">
                     <span>Сплит верт.</span>
                     <span class="key-badge">[%]</span>
                   </button>
-                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('&quot;', 'SPLIT HORIZONTAL (&quot;)')">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('&quot;', 'SPLIT H (&quot;)')">
                     <span>Сплит гор.</span>
                     <span class="key-badge">[&quot;]</span>
                   </button>
-                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('o', 'NEXT PANE (o)')">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('o', 'NEXT (o)')">
                     <span>След. панель</span>
                     <span class="key-badge">[o]</span>
                   </button>
-                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('z', 'ZOOM PANE (z)')">
+                  <button type="button" class="btn btn-cyan dropdown-btn" onclick="sendTmuxKey('z', 'ZOOM (z)')">
                     <span>Zoom панели</span>
                     <span class="key-badge">[z]</span>
                   </button>
@@ -2331,7 +2331,7 @@
       document.getElementById('currentSessionLabel').textContent = activeSession || 'DEFAULT';
       let modeText = 'SSH';
       if (termMode === 'exec') {
-        modeText = (currentExecSubView === 'ssh_plus') ? 'SSH+' : 'LINE-EXEC';
+        modeText = (currentExecSubView === 'ssh_plus') ? 'SSH+' : 'EXEC';
       }
       document.getElementById('termModeLabel').textContent = modeText;
     }
@@ -2410,7 +2410,7 @@
         closeConnectMenu();
         menu.style.display = 'flex';
         if (btn) btn.classList.add('active-header-tab');
-        setStatus('TMUX (CTRL+B SENT)', 'var(--cyan)');
+        setStatus('CTRL+B', 'var(--cyan)');
         const rect = menu.getBoundingClientRect();
         if (rect.right > window.innerWidth - 8) {
           menu.style.left = 'auto';
@@ -2438,7 +2438,7 @@
       }
       closeTmuxMenu();
       if (label) {
-        setStatus('TMUX ' + label, 'var(--text)');
+        setStatus('' + label, 'var(--text)');
       }
       if (termMode === 'exec' && currentExecSubView === 'ssh_plus' && termExtra) {
         try { termExtra.focus(); } catch (_) {}
@@ -3153,7 +3153,7 @@
       if (seq) {
         sendTerminalRaw(seq);
         const labelMap = {
-          delall: 'DEL ALL (CTRL+A, CTRL+K)',
+          delall: '(CTRL+A, CTRL+K)',
           clear: 'CLEAR (CTRL+L)',
           backspace: 'BACKSPACE',
           tab: isShift ? 'BACKTAB' : 'TAB',
@@ -3164,7 +3164,7 @@
           space: 'SPACE',
           slash: 'SLASH'
         };
-        setStatus((labelMap[key] || key.toUpperCase()) + ' SENT', 'var(--text)');
+        setStatus((labelMap[key] || key.toUpperCase()) + '', 'var(--text)');
       }
     }
 
