@@ -410,9 +410,37 @@
     .fm-table .name:not(.dir):hover { text-decoration: underline; color: #fff; }
     .fm-table .dir { color: var(--cyan); }
     .fm-table tr.fm-row-selected td { background: rgba(0, 255, 102, 0.09); }
+    .fm-th-actions-wrap {
+      display: inline-flex; align-items: center; gap: 4px;
+    }
     .fm-th-check {
-      display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-      color: var(--cyan); font-size: var(--ui-header-font-size);
+      display: inline-flex; align-items: center; cursor: pointer;
+    }
+    .fm-header-actions-btn {
+      background: transparent; border: 1px solid transparent; color: var(--cyan);
+      font-family: inherit; font-size: var(--ui-header-font-size); font-weight: bold;
+      cursor: pointer; padding: 2px 5px; border-radius: 3px; display: inline-flex;
+      align-items: center; gap: 4px; letter-spacing: 0.5px; line-height: 1.2;
+      -webkit-tap-highlight-color: transparent; transition: all 0.15s ease;
+    }
+    .fm-header-actions-btn:hover, .fm-header-actions-btn.active-mode {
+      border-color: var(--cyan); background: rgba(0, 240, 255, 0.12); color: #ffffff;
+      box-shadow: 0 0 8px rgba(0, 240, 255, 0.25);
+    }
+    .fm-header-actions-btn.has-selection {
+      border-color: var(--cyan); background: rgba(0, 240, 255, 0.15); color: #ffffff;
+      box-shadow: 0 0 8px rgba(0, 240, 255, 0.25);
+    }
+    .fm-sel-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+      background: var(--cyan); color: #050608; font-size: 10px; font-weight: bold;
+      line-height: 1; vertical-align: middle;
+    }
+    .fm-menu-header {
+      padding: 4px 8px; font-size: 10px; font-weight: bold; letter-spacing: 1px;
+      color: var(--cyan); text-transform: uppercase; border-bottom: 1px solid var(--border);
+      margin-bottom: 2px;
     }
     .fm-check {
       -webkit-appearance: none; appearance: none;
@@ -440,13 +468,6 @@
       display: inline-flex; align-items: center; justify-content: center;
       width: 24px; height: 24px; margin-right: 4px; vertical-align: middle;
       cursor: pointer; -webkit-tap-highlight-color: transparent;
-    }
-    .fm-sel-bar {
-      display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
-      padding: 6px 0; margin-bottom: 4px;
-    }
-    .fm-sel-bar .fm-sel-count {
-      color: var(--cyan); font-size: calc(var(--ui-font-size) - 2px); letter-spacing: 0.5px;
     }
     .fm-menu-item.fm-menu-run { color: var(--text); border-color: rgba(0, 255, 102, 0.45); }
     .fm-menu-item.fm-menu-run:hover { border-color: var(--text); background: rgba(0, 255, 102, 0.18); }
@@ -1620,31 +1641,28 @@
           <button class="btn" type="button" onclick="fmList()">[GO]</button>
           <button class="btn" type="button" onclick="fmList()">[REFRESH]</button>
           <button class="btn btn-cyan" type="button" onclick="fmNewFolder()" title="Create new directory in current path">[+ FOLDER]</button>
-          <button class="btn btn-cyan" type="button" onclick="openArchiveModal()" title="Pack selected files/folders or current directory into archive">[ARCHIVE]</button>
           <button class="btn btn-cyan" type="button" onclick="document.getElementById('fmUploadInput').click()" title="Upload file to current directory">[UPLOAD]</button>
           <input type="file" id="fmUploadInput" style="opacity:0;position:absolute;width:1px;height:1px;pointer-events:none;top:0;left:0;" onchange="fmUpload(event)" />
         </div>
         <div id="fmLog" class="log-box">Select a session first, then browse /content.</div>
-        <div id="fmSelBar" class="fm-sel-bar" style="display:none;">
-          <span class="fm-sel-count" id="fmSelCount">0 SELECTED</span>
-          <button class="btn" type="button" onclick="fmBulkCopyPaths()" title="Copy selected paths to clipboard">[COPY_PATHS]</button>
-          <button class="btn btn-cyan" type="button" onclick="openArchiveModalForSelection()" title="Pack selected files and folders into an archive">[ARCHIVE]</button>
-          <button class="btn btn-cyan" type="button" id="fmSelExtractBtn" onclick="fmBulkExtract()" title="Extract selected archive(s)" style="display:none;">[EXTRACT]</button>
-          <button class="btn" type="button" id="fmSelZipDlBtn" onclick="fmDownloadAsZip()" title="Compress selection into ZIP and download directly">[DOWNLOAD_AS_ZIP]</button>
-          <button class="btn" type="button" id="fmSelDownloadBtn" onclick="fmBulkDownload()" title="Download selected files individually">[DOWNLOAD]</button>
-          <button class="btn btn-danger" type="button" onclick="fmBulkDelete()" title="Delete selected files and folders">[DELETE]</button>
-          <button class="btn" type="button" onclick="fmClearSelection()" title="Clear selection">[CLEAR]</button>
-        </div>
         <div style="overflow-x:auto;">
           <table class="fm-table">
             <thead><tr>
               <th>NAME</th>
               <th>SIZE</th>
-              <th style="min-width:84px;">
-                <label class="fm-th-check" title="Select / deselect all">
-                  <input type="checkbox" id="fmSelectAll" class="fm-check" onchange="fmToggleSelectAll(this.checked)" aria-label="Select all" />
-                  <span>ACTIONS</span>
-                </label>
+              <th style="min-width:96px;">
+                <div class="fm-th-actions-wrap">
+                  <label class="fm-th-check" title="Select / deselect all">
+                    <input type="checkbox" id="fmSelectAll" class="fm-check" onchange="fmToggleSelectAll(this.checked)" aria-label="Select all" />
+                  </label>
+                  <button id="fmHeaderActionsBtn" class="fm-header-actions-btn" type="button" onclick="fmToggleHeaderMenu(event, this)" title="Actions menu" aria-haspopup="menu">
+                    <span>ACTIONS</span>
+                    <span id="fmSelBadge" class="fm-sel-badge" style="display:none;">0</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="margin-left:2px;opacity:0.8;">
+                      <path d="M7 10l5 5 5-5z"></path>
+                    </svg>
+                  </button>
+                </div>
               </th>
             </tr></thead>
             <tbody id="fmBody"></tbody>
@@ -5295,11 +5313,17 @@
     }
 
     function fmUpdateSelBar() {
-      const bar = document.getElementById('fmSelBar');
-      const cnt = document.getElementById('fmSelCount');
       const n = fmSelection.size;
-      if (bar) bar.style.display = n ? 'flex' : 'none';
-      if (cnt) cnt.textContent = n + ' SELECTED';
+      const badge = document.getElementById('fmSelBadge');
+      const headerBtn = document.getElementById('fmHeaderActionsBtn');
+      if (badge) {
+        badge.textContent = n;
+        badge.style.display = n ? 'inline-flex' : 'none';
+      }
+      if (headerBtn) {
+        headerBtn.classList.toggle('has-selection', n > 0);
+        headerBtn.title = n ? (n + ' selected — open ACTIONS menu') : 'Actions menu';
+      }
 
       let selVisible = 0;
       fmLastEntries.forEach(ent => { if (fmSelection.has(ent.path)) selVisible++; });
@@ -5317,23 +5341,6 @@
         chk.checked = on;
         tr.classList.toggle('fm-row-selected', on);
       });
-
-      const dl = document.getElementById('fmSelDownloadBtn');
-      let hasFile = false;
-      let hasArchive = false;
-      fmSelection.forEach((isDir, p) => {
-        if (!isDir) {
-          hasFile = true;
-          if (fmIsArchive(p)) hasArchive = true;
-        }
-      });
-      if (dl) dl.disabled = !hasFile;
-
-      const extBtn = document.getElementById('fmSelExtractBtn');
-      if (extBtn) extBtn.style.display = hasArchive ? 'inline-block' : 'none';
-
-      const zipDlBtn = document.getElementById('fmSelZipDlBtn');
-      if (zipDlBtn) zipDlBtn.style.display = n > 0 ? 'inline-block' : 'none';
     }
 
     function fmBulkCopyPaths() {
@@ -5574,6 +5581,30 @@
       fmCloseRowMenu();
       menu.innerHTML = '';
 
+      if (fmSelection.size > 1 && fmSelection.has(remotePath)) {
+        const headerTitle = document.createElement('div');
+        headerTitle.className = 'fm-menu-header';
+        headerTitle.textContent = fmSelection.size + ' SELECTED';
+        menu.appendChild(headerTitle);
+
+        fmAddMenuItem(menu, 'ARCHIVE (' + fmSelection.size + ')', 'pack', 'fm-menu-cyan', () => openArchiveModalForSelection());
+        fmAddMenuItem(menu, 'DOWNLOAD AS ZIP', 'pack', '', () => fmDownloadAsZip());
+        fmAddMenuItem(menu, 'COPY PATHS (' + fmSelection.size + ')', 'copy', '', () => fmBulkCopyPaths());
+        let hasArchive = false;
+        fmSelection.forEach((d, p) => { if (!d && fmIsArchive(p)) hasArchive = true; });
+        if (hasArchive) {
+          fmAddMenuItem(menu, 'EXTRACT', 'unpack', 'fm-menu-cyan', () => fmBulkExtract());
+        }
+        let hasFile = false;
+        fmSelection.forEach((d) => { if (!d) hasFile = true; });
+        if (hasFile) {
+          fmAddMenuItem(menu, 'DOWNLOAD (' + fmSelection.size + ')', 'download', '', () => fmBulkDownload());
+        }
+        fmAddMenuItem(menu, 'DELETE (' + fmSelection.size + ')', 'del', 'fm-menu-danger', () => fmBulkDelete());
+        fmAddMenuItem(menu, 'CLEAR SELECTION', '', '', () => fmClearSelection());
+        fmAddMenuSeparator(menu);
+      }
+
       if (!isDir && fmIsRunnable(remotePath)) {
         fmAddMenuItem(menu, 'RUN', 'run', 'fm-menu-run', () => fmRunFile(remotePath));
         fmAddMenuSeparator(menu);
@@ -5617,11 +5648,84 @@
       btn.classList.add('active-mode');
     }
 
+    function fmToggleHeaderMenu(ev, btn) {
+      if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+      const menu = document.getElementById('fmRowMenu');
+      if (!menu) return;
+      if (fmMenuAnchor === btn && menu.classList.contains('open')) { fmCloseRowMenu(); return; }
+      fmCloseRowMenu();
+      menu.innerHTML = '';
+
+      const n = fmSelection.size;
+      let hasFile = false;
+      let hasArchive = false;
+      fmSelection.forEach((isDir, p) => {
+        if (!isDir) {
+          hasFile = true;
+          if (fmIsArchive(p)) hasArchive = true;
+        }
+      });
+
+      if (n > 0) {
+        const headerTitle = document.createElement('div');
+        headerTitle.className = 'fm-menu-header';
+        headerTitle.textContent = n + ' SELECTED';
+        menu.appendChild(headerTitle);
+
+        fmAddMenuItem(menu, 'COPY PATHS', 'copy', '', () => fmBulkCopyPaths());
+        fmAddMenuItem(menu, 'ARCHIVE', 'pack', 'fm-menu-cyan', () => openArchiveModalForSelection());
+        if (hasArchive) {
+          fmAddMenuItem(menu, 'EXTRACT', 'unpack', 'fm-menu-cyan', () => fmBulkExtract());
+        }
+        fmAddMenuItem(menu, 'DOWNLOAD AS ZIP', 'pack', '', () => fmDownloadAsZip());
+        if (hasFile) {
+          fmAddMenuItem(menu, 'DOWNLOAD', 'download', '', () => fmBulkDownload());
+        }
+        fmAddMenuItem(menu, 'DELETE', 'del', 'fm-menu-danger', () => fmBulkDelete());
+        fmAddMenuSeparator(menu);
+        fmAddMenuItem(menu, 'CLEAR SELECTION', '', '', () => fmClearSelection());
+      } else {
+        const headerTitle = document.createElement('div');
+        headerTitle.className = 'fm-menu-header';
+        headerTitle.textContent = 'ACTIONS';
+        menu.appendChild(headerTitle);
+
+        fmAddMenuItem(menu, 'SELECT ALL', '', '', () => {
+          const all = document.getElementById('fmSelectAll');
+          if (all) all.checked = true;
+          fmToggleSelectAll(true);
+        });
+        fmAddMenuItem(menu, '+ FOLDER', 'open', '', () => fmNewFolder());
+        fmAddMenuItem(menu, 'UPLOAD FILE', 'download', '', () => document.getElementById('fmUploadInput').click());
+        fmAddMenuItem(menu, 'ARCHIVE CURRENT DIR', 'pack', '', () => openArchiveModal([document.getElementById('fmPath').value || fmPath || '/content']));
+        fmAddMenuItem(menu, 'REFRESH', '', '', () => fmList());
+      }
+
+      menu.style.left = '0px';
+      menu.style.top = '0px';
+      menu.style.display = 'flex';
+      menu.classList.add('open');
+
+      const r = btn.getBoundingClientRect();
+      const mw = menu.offsetWidth;
+      const mh = menu.offsetHeight;
+      let left = r.right - mw;
+      if (left < 8) left = 8;
+      if (left + mw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - mw - 8);
+      let top = r.bottom + 4;
+      if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+      menu.style.left = left + 'px';
+      menu.style.top = top + 'px';
+
+      fmMenuAnchor = btn;
+      btn.classList.add('active-mode');
+    }
+
     document.addEventListener('click', (e) => {
       const menu = document.getElementById('fmRowMenu');
       if (!menu || !menu.classList.contains('open')) return;
       if (menu.contains(e.target)) return;
-      if (e.target.closest && e.target.closest('.fm-actions-btn')) return;
+      if (e.target.closest && e.target.closest('.fm-actions-btn, .fm-header-actions-btn')) return;
       fmCloseRowMenu();
     });
     document.addEventListener('keydown', (e) => {
@@ -5640,12 +5744,12 @@
 
     function fmGetDownloadUrl(remotePath) {
       const sess = (activeSession || '').trim();
-      const apiKey = (cfgApiKey || '').trim();
+      const cfg = getCfg();
+      const apiKey = (cfg.key || '').trim();
       const q = '?path=' + encodeURIComponent(remotePath) +
         (sess ? '&session=' + encodeURIComponent(sess) : '') +
         (apiKey ? '&api_key=' + encodeURIComponent(apiKey) : '');
-      const base = (cfgBaseUrl || '').replace(/\/$/, '');
-      return base + '/api/files/download' + q;
+      return apiUrl('/api/files/download' + q);
     }
 
     async function fmDownload(remotePath) {
