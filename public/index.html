@@ -450,6 +450,8 @@
     }
     .fm-menu-item.fm-menu-run { color: var(--text); border-color: rgba(0, 255, 102, 0.45); }
     .fm-menu-item.fm-menu-run:hover { border-color: var(--text); background: rgba(0, 255, 102, 0.18); }
+    .fm-menu-item.fm-menu-cyan { color: var(--cyan); border-color: rgba(0, 240, 255, 0.45); }
+    .fm-menu-item.fm-menu-cyan:hover { border-color: var(--cyan); background: rgba(0, 240, 255, 0.18); }
     .app-toast {
       position: fixed; bottom: 24px; right: 24px;
       background: #090d14; border: 1px solid var(--text); color: var(--text);
@@ -1618,6 +1620,7 @@
           <button class="btn" type="button" onclick="fmList()">[GO]</button>
           <button class="btn" type="button" onclick="fmList()">[REFRESH]</button>
           <button class="btn btn-cyan" type="button" onclick="fmNewFolder()" title="Create new directory in current path">[+ FOLDER]</button>
+          <button class="btn btn-cyan" type="button" onclick="openArchiveModal()" title="Pack selected files/folders or current directory into archive">[ARCHIVE]</button>
           <button class="btn btn-cyan" type="button" onclick="document.getElementById('fmUploadInput').click()" title="Upload file to current directory">[UPLOAD]</button>
           <input type="file" id="fmUploadInput" style="opacity:0;position:absolute;width:1px;height:1px;pointer-events:none;top:0;left:0;" onchange="fmUpload(event)" />
         </div>
@@ -1625,7 +1628,10 @@
         <div id="fmSelBar" class="fm-sel-bar" style="display:none;">
           <span class="fm-sel-count" id="fmSelCount">0 SELECTED</span>
           <button class="btn" type="button" onclick="fmBulkCopyPaths()" title="Copy selected paths to clipboard">[COPY_PATHS]</button>
-          <button class="btn" type="button" id="fmSelDownloadBtn" onclick="fmBulkDownload()" title="Download selected files">[DOWNLOAD]</button>
+          <button class="btn btn-cyan" type="button" onclick="openArchiveModalForSelection()" title="Pack selected files and folders into an archive">[ARCHIVE]</button>
+          <button class="btn btn-cyan" type="button" id="fmSelExtractBtn" onclick="fmBulkExtract()" title="Extract selected archive(s)" style="display:none;">[EXTRACT]</button>
+          <button class="btn" type="button" id="fmSelZipDlBtn" onclick="fmDownloadAsZip()" title="Compress selection into ZIP and download directly">[DOWNLOAD_AS_ZIP]</button>
+          <button class="btn" type="button" id="fmSelDownloadBtn" onclick="fmBulkDownload()" title="Download selected files individually">[DOWNLOAD]</button>
           <button class="btn btn-danger" type="button" onclick="fmBulkDelete()" title="Delete selected files and folders">[DELETE]</button>
           <button class="btn" type="button" onclick="fmClearSelection()" title="Clear selection">[CLEAR]</button>
         </div>
@@ -1901,6 +1907,125 @@
           <div><button class="btn btn-cyan" id="extModalPopupBtn" type="button">[OPEN_POPUP]</button></div>
           <textarea id="extModalFallbackUrl" readonly rows="5" onclick="this.select()"></textarea>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARCHIVE CREATION MODAL -->
+  <div id="archiveModal" class="ext-modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="archiveModalTitle">
+    <div class="cmd-modal-window" style="width:520px;">
+      <div class="cmd-modal-header">
+        <div class="cmd-modal-title" id="archiveModalTitle">
+          <span style="color:var(--cyan);font-weight:bold;">[ARCHIVE]</span>
+          <span>CREATE ARCHIVE</span>
+        </div>
+        <button class="arrows-pad-close" type="button" onclick="closeArchiveModal()" title="Close">✕</button>
+      </div>
+      <form id="archiveModalForm" onsubmit="submitArchiveModal(event)">
+        <div class="cmd-modal-body">
+          <div style="margin-bottom:12px;">
+            <label class="stat-label" style="display:block;margin-bottom:4px;">SELECTED ITEMS (<span id="arcItemsCount">0</span>)</label>
+            <div id="arcItemsPreview" style="max-height:90px;overflow-y:auto;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:11px;font-family:var(--font-mono);word-break:break-all;"></div>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="stat-label" for="arcModalName" style="display:block;margin-bottom:4px;">ARCHIVE NAME</label>
+            <input type="text" id="arcModalName" placeholder="archive.zip" required autocomplete="off" />
+          </div>
+          <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div>
+              <label class="stat-label" for="arcModalFormat" style="display:block;margin-bottom:4px;">FORMAT</label>
+              <select id="arcModalFormat" onchange="onArcFormatChange()">
+                <option value="zip">.zip (Standard / Universal)</option>
+                <option value="tar.gz">.tar.gz (Gzip / Fast)</option>
+                <option value="tar.bz2">.tar.bz2 (Bzip2 / High)</option>
+                <option value="tar.xz">.tar.xz (XZ / Max)</option>
+                <option value="tar">.tar (Uncompressed)</option>
+                <option value="7z">.7z (7-Zip)</option>
+              </select>
+            </div>
+            <div>
+              <label class="stat-label" for="arcModalDest" style="display:block;margin-bottom:4px;">DESTINATION FOLDER</label>
+              <input type="text" id="arcModalDest" value="/content" required />
+            </div>
+          </div>
+          <div id="arcModalLog" class="hint" style="min-height:16px;"></div>
+        </div>
+        <div class="cmd-modal-footer">
+          <button type="submit" class="btn btn-cyan" id="arcModalSubmitBtn">[CREATE_ARCHIVE]</button>
+          <button type="button" class="btn" onclick="closeArchiveModal()">[CANCEL]</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ARCHIVE EXTRACTION MODAL -->
+  <div id="extractModal" class="ext-modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="extractModalTitle">
+    <div class="cmd-modal-window" style="width:500px;">
+      <div class="cmd-modal-header">
+        <div class="cmd-modal-title" id="extractModalTitle">
+          <span style="color:var(--cyan);font-weight:bold;">[EXTRACT]</span>
+          <span>UNPACK ARCHIVE</span>
+        </div>
+        <button class="arrows-pad-close" type="button" onclick="closeExtractModal()" title="Close">✕</button>
+      </div>
+      <form id="extractModalForm" onsubmit="submitExtractModal(event)">
+        <div class="cmd-modal-body">
+          <div style="margin-bottom:12px;">
+            <label class="stat-label" style="display:block;margin-bottom:4px;">ARCHIVE FILE</label>
+            <div id="extModalFilePreview" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:var(--font-mono);word-break:break-all;color:var(--cyan);"></div>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="stat-label" for="extModalDest" style="display:block;margin-bottom:4px;">EXTRACT TO DIRECTORY</label>
+            <input type="text" id="extModalDest" value="" required />
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+              <button type="button" class="btn" style="padding:2px 8px;font-size:11px;" onclick="setExtractDest('subfolder')">[SUBFOLDER]</button>
+              <button type="button" class="btn" style="padding:2px 8px;font-size:11px;" onclick="setExtractDest('current')">[CURRENT_DIR]</button>
+            </div>
+          </div>
+          <div style="margin-bottom:8px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
+              <input type="checkbox" id="extModalRemoveAfter" />
+              <span>Delete archive file after successful extraction</span>
+            </label>
+          </div>
+          <div id="extModalLog" class="hint" style="min-height:16px;"></div>
+        </div>
+        <div class="cmd-modal-footer">
+          <button type="submit" class="btn btn-cyan" id="extModalSubmitBtn">[EXTRACT_NOW]</button>
+          <button type="button" class="btn" onclick="closeExtractModal()">[CANCEL]</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ARCHIVE VIEW CONTENTS MODAL -->
+  <div id="archiveViewModal" class="ext-modal-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="arcViewTitle">
+    <div class="cmd-modal-window" style="width:680px;max-width:96vw;">
+      <div class="cmd-modal-header">
+        <div class="cmd-modal-title" id="arcViewTitle">
+          <span style="color:var(--cyan);font-weight:bold;">[VIEW]</span>
+          <span id="arcViewHeading">ARCHIVE CONTENTS</span>
+        </div>
+        <button class="arrows-pad-close" type="button" onclick="closeArchiveViewModal()" title="Close">✕</button>
+      </div>
+      <div class="cmd-modal-body" style="padding-bottom:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <span id="arcViewInfo" class="hint" style="font-family:var(--font-mono);">Loading archive entries…</span>
+          <input type="text" id="arcViewFilter" placeholder="Filter files…" oninput="filterArchiveEntries(this.value)" style="width:180px;padding:3px 8px;font-size:11px;" />
+        </div>
+        <div style="max-height:55vh;overflow-y:auto;border:1px solid var(--border);border-radius:4px;background:#06080d;">
+          <table class="fm-table" style="font-size:11px;margin:0;">
+            <thead><tr>
+              <th style="padding:4px 8px;">FILE / PATH</th>
+              <th style="width:90px;padding:4px 8px;">SIZE</th>
+            </tr></thead>
+            <tbody id="arcViewBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="cmd-modal-footer">
+        <button type="button" class="btn btn-cyan" id="arcViewExtractBtn" onclick="extractFromViewModal()">[EXTRACT_ALL]</button>
+        <button type="button" class="btn" onclick="closeArchiveViewModal()">[CLOSE]</button>
       </div>
     </div>
   </div>
@@ -5194,11 +5319,21 @@
       });
 
       const dl = document.getElementById('fmSelDownloadBtn');
-      if (dl) {
-        let hasFile = false;
-        fmSelection.forEach(isDir => { if (!isDir) hasFile = true; });
-        dl.disabled = !hasFile;
-      }
+      let hasFile = false;
+      let hasArchive = false;
+      fmSelection.forEach((isDir, p) => {
+        if (!isDir) {
+          hasFile = true;
+          if (fmIsArchive(p)) hasArchive = true;
+        }
+      });
+      if (dl) dl.disabled = !hasFile;
+
+      const extBtn = document.getElementById('fmSelExtractBtn');
+      if (extBtn) extBtn.style.display = hasArchive ? 'inline-block' : 'none';
+
+      const zipDlBtn = document.getElementById('fmSelZipDlBtn');
+      if (zipDlBtn) zipDlBtn.style.display = n > 0 ? 'inline-block' : 'none';
     }
 
     function fmBulkCopyPaths() {
@@ -5393,7 +5528,10 @@
         rename: '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path>',
         move: '<polyline points="5 9 2 12 5 15"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line>',
         del: '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path>',
-        run: '<polygon points="6 4 20 12 6 20 6 4"></polygon>'
+        run: '<polygon points="6 4 20 12 6 20 6 4"></polygon>',
+        pack: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line>',
+        unpack: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="12 3 12 12"></polyline><polyline points="8 7 12 3 16 7"></polyline>',
+        view: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>'
       };
       return '<span class="fm-menu-ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         (svgs[kind] || '') + '</svg></span>';
@@ -5422,6 +5560,12 @@
       menu.appendChild(sep);
     }
 
+    const FM_ARCHIVE_EXTS = ['.zip', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.tar.xz', '.txz', '.tar', '.7z', '.rar', '.gz', '.bz2', '.xz'];
+    function fmIsArchive(p) {
+      const low = String(p || '').toLowerCase();
+      return FM_ARCHIVE_EXTS.some(ext => low.endsWith(ext));
+    }
+
     function fmToggleRowMenu(ev, btn, remotePath, isDir) {
       if (ev) { ev.stopPropagation(); ev.preventDefault(); }
       const menu = document.getElementById('fmRowMenu');
@@ -5434,6 +5578,12 @@
         fmAddMenuItem(menu, 'RUN', 'run', 'fm-menu-run', () => fmRunFile(remotePath));
         fmAddMenuSeparator(menu);
       }
+      if (!isDir && fmIsArchive(remotePath)) {
+        fmAddMenuItem(menu, 'EXTRACT', 'unpack', 'fm-menu-cyan', () => openExtractModal(remotePath));
+        fmAddMenuItem(menu, 'VIEW CONTENTS', 'view', '', () => openArchiveViewModal(remotePath));
+        fmAddMenuSeparator(menu);
+      }
+      fmAddMenuItem(menu, 'ARCHIVE', 'pack', '', () => openArchiveModal([remotePath]));
       fmAddMenuItem(menu, 'COPY PATH', 'copy', '', () => copyFilePath(null, remotePath, btn));
       fmAddMenuSeparator(menu);
       if (isDir) {
@@ -5488,32 +5638,439 @@
       fmCloseRowMenu();
     }, true);
 
+    function fmGetDownloadUrl(remotePath) {
+      const sess = (activeSession || '').trim();
+      const apiKey = (cfgApiKey || '').trim();
+      const q = '?path=' + encodeURIComponent(remotePath) +
+        (sess ? '&session=' + encodeURIComponent(sess) : '') +
+        (apiKey ? '&api_key=' + encodeURIComponent(apiKey) : '');
+      const base = (cfgBaseUrl || '').replace(/\/$/, '');
+      return base + '/api/files/download' + q;
+    }
+
     async function fmDownload(remotePath) {
       const log = document.getElementById('fmLog');
+      const filename = remotePath.split('/').pop() || 'download';
       log.className = 'log-box';
-      log.textContent = 'Downloading ' + remotePath + ' …';
+      log.textContent = 'Starting download for ' + filename + ' …';
       try {
-        const q = '?path=' + encodeURIComponent(remotePath) +
-          (activeSession ? '&session=' + encodeURIComponent(activeSession) : '');
-        const r = await apiFetch('/api/files/download' + q);
-        if (!r.ok) {
-          const t = await r.text();
-          log.className = 'log-box err';
-          log.textContent = 'Download failed: ' + t.slice(0, 300);
-          return;
-        }
-        const blob = await r.blob();
+        const downloadUrl = fmGetDownloadUrl(remotePath);
+        // Direct browser / DownloadManager streaming link (no RAM memory buffer, supports huge files)
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = remotePath.split('/').pop() || 'download';
+        a.href = downloadUrl;
+        a.download = filename;
+        a.style.display = 'none';
         document.body.appendChild(a);
         a.click();
-        a.remove();
+        setTimeout(() => a.remove(), 1000);
         log.className = 'log-box ok';
-        log.textContent = 'Downloaded ' + remotePath;
+        log.textContent = 'Download started: ' + filename;
+        showToast('⬇ Downloading: ' + filename);
       } catch (e) {
         log.className = 'log-box err';
-        log.textContent = e.message;
+        log.textContent = 'Download error: ' + e.message;
+      }
+    }
+
+    /* ---------- ARCHIVE OPERATIONS (Pack, Extract, Inspect) ---------- */
+    let currentArcModalPaths = [];
+    let currentExtractArchivePath = '';
+    let currentViewArchivePath = '';
+    let currentArchiveEntriesList = [];
+
+    function openArchiveModal(paths) {
+      if (!paths || !paths.length) {
+        if (fmSelection.size > 0) {
+          paths = Array.from(fmSelection.keys());
+        } else {
+          const currentDir = (document.getElementById('fmPath').value || fmPath || '/content').trim() || '/content';
+          paths = [currentDir];
+        }
+      }
+      currentArcModalPaths = paths;
+
+      const cnt = document.getElementById('arcItemsCount');
+      if (cnt) cnt.textContent = paths.length;
+
+      const prev = document.getElementById('arcItemsPreview');
+      if (prev) {
+        prev.innerHTML = paths.map(p => {
+          const isDir = fmSelection.get(p) === true || p.endsWith('/');
+          return '<div>' + (isDir ? '📁 ' : '📄 ') + esc(p) + '</div>';
+        }).join('');
+      }
+
+      const currentDir = (document.getElementById('fmPath').value || fmPath || '/content').trim() || '/content';
+      const destInput = document.getElementById('arcModalDest');
+      if (destInput) destInput.value = currentDir;
+
+      const nameInput = document.getElementById('arcModalName');
+      const fmtSelect = document.getElementById('arcModalFormat');
+      const fmt = (fmtSelect && fmtSelect.value) || 'zip';
+      const ext = (fmt === 'zip') ? '.zip' : ('.' + fmt);
+
+      if (nameInput) {
+        if (paths.length === 1) {
+          const base = paths[0].replace(/\/$/, '').split('/').pop() || 'archive';
+          nameInput.value = base + ext;
+        } else {
+          const d = new Date();
+          const stamp = d.getFullYear() +
+            String(d.getMonth() + 1).padStart(2, '0') +
+            String(d.getDate()).padStart(2, '0') + '_' +
+            String(d.getHours()).padStart(2, '0') +
+            String(d.getMinutes()).padStart(2, '0');
+          nameInput.value = 'archive_' + stamp + ext;
+        }
+      }
+
+      const log = document.getElementById('arcModalLog');
+      if (log) { log.className = 'hint'; log.textContent = ''; }
+
+      const modal = document.getElementById('archiveModal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function openArchiveModalForSelection() {
+      openArchiveModal(Array.from(fmSelection.keys()));
+    }
+
+    function closeArchiveModal() {
+      const modal = document.getElementById('archiveModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function onArcFormatChange() {
+      const nameInput = document.getElementById('arcModalName');
+      const fmtSelect = document.getElementById('arcModalFormat');
+      if (!nameInput || !fmtSelect) return;
+      const fmt = fmtSelect.value;
+      const ext = (fmt === 'zip') ? '.zip' : ('.' + fmt);
+      let cur = nameInput.value.trim();
+      for (const e of FM_ARCHIVE_EXTS) {
+        if (cur.toLowerCase().endsWith(e)) {
+          cur = cur.slice(0, -e.length);
+          break;
+        }
+      }
+      nameInput.value = cur + ext;
+    }
+
+    async function submitArchiveModal(ev) {
+      if (ev) ev.preventDefault();
+      const nameInput = document.getElementById('arcModalName');
+      const fmtSelect = document.getElementById('arcModalFormat');
+      const destInput = document.getElementById('arcModalDest');
+      const log = document.getElementById('arcModalLog');
+      const btn = document.getElementById('arcModalSubmitBtn');
+
+      if (!currentArcModalPaths.length) {
+        if (log) { log.className = 'hint err'; log.textContent = 'No items selected'; }
+        return;
+      }
+
+      const name = (nameInput && nameInput.value.trim()) || 'archive.zip';
+      const fmt = (fmtSelect && fmtSelect.value) || 'zip';
+      const destDir = (destInput && destInput.value.trim()) || '/content';
+      const baseDir = (document.getElementById('fmPath').value || fmPath || '/content').trim() || '/content';
+
+      if (btn) { btn.disabled = true; btn.textContent = 'PACKING…'; }
+      if (log) { log.className = 'hint'; log.textContent = 'Creating archive on Colab VM…'; }
+
+      try {
+        const r = await apiFetch('/api/files/archive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session: activeSession,
+            paths: currentArcModalPaths,
+            name: name,
+            destDir: destDir,
+            format: fmt,
+            baseDir: baseDir
+          })
+        });
+        const d = await r.json();
+        if (d && d.success) {
+          showToast('✓ Archive created: ' + (d.archivePath.split('/').pop() || d.archivePath));
+          closeArchiveModal();
+          const fmlog = document.getElementById('fmLog');
+          if (fmlog) {
+            fmlog.className = 'log-box ok';
+            fmlog.textContent = 'ARCHIVED: ' + d.archivePath + ' (' + fmtSize(d.size) + ', ' + d.count + ' files in ' + d.duration + 's)';
+          }
+          fmClearSelection();
+          fmList();
+        } else {
+          if (log) {
+            log.className = 'hint err';
+            log.textContent = 'Failed: ' + ((d && (d.error || d.output)) || 'Server error');
+          }
+        }
+      } catch (err) {
+        if (log) {
+          log.className = 'hint err';
+          log.textContent = 'Error: ' + err.message;
+        }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '[CREATE_ARCHIVE]'; }
+      }
+    }
+
+    function openExtractModal(remotePath) {
+      currentExtractArchivePath = remotePath;
+      const prev = document.getElementById('extModalFilePreview');
+      if (prev) prev.textContent = remotePath;
+
+      const parent = parentPath(remotePath);
+      const base = remotePath.split('/').pop().replace(/\.(tar\.(gz|bz2|xz)|tgz|tbz2|txz|zip|7z|rar|gz|bz2|xz)$/i, '');
+      const subfolder = (parent === '/' ? '' : parent) + '/' + base;
+
+      const destInput = document.getElementById('extModalDest');
+      if (destInput) destInput.value = subfolder;
+
+      const chk = document.getElementById('extModalRemoveAfter');
+      if (chk) chk.checked = false;
+
+      const log = document.getElementById('extModalLog');
+      if (log) { log.className = 'hint'; log.textContent = ''; }
+
+      const modal = document.getElementById('extractModal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function setExtractDest(mode) {
+      const destInput = document.getElementById('extModalDest');
+      if (!destInput || !currentExtractArchivePath) return;
+      const parent = parentPath(currentExtractArchivePath);
+      if (mode === 'current') {
+        destInput.value = parent;
+      } else {
+        const base = currentExtractArchivePath.split('/').pop().replace(/\.(tar\.(gz|bz2|xz)|tgz|tbz2|txz|zip|7z|rar|gz|bz2|xz)$/i, '');
+        destInput.value = (parent === '/' ? '' : parent) + '/' + base;
+      }
+    }
+
+    function closeExtractModal() {
+      const modal = document.getElementById('extractModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function submitExtractModal(ev) {
+      if (ev) ev.preventDefault();
+      const destInput = document.getElementById('extModalDest');
+      const chk = document.getElementById('extModalRemoveAfter');
+      const log = document.getElementById('extModalLog');
+      const btn = document.getElementById('extModalSubmitBtn');
+
+      if (!currentExtractArchivePath) return;
+      const destDir = (destInput && destInput.value.trim()) || parentPath(currentExtractArchivePath);
+      const removeAfter = !!(chk && chk.checked);
+
+      if (btn) { btn.disabled = true; btn.textContent = 'EXTRACTING…'; }
+      if (log) { log.className = 'hint'; log.textContent = 'Unpacking on Colab VM…'; }
+
+      try {
+        const r = await apiFetch('/api/files/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session: activeSession,
+            archivePath: currentExtractArchivePath,
+            destDir: destDir,
+            removeAfter: removeAfter
+          })
+        });
+        const d = await r.json();
+        if (d && d.success) {
+          showToast('✓ Extracted ' + d.extractedCount + ' items');
+          closeExtractModal();
+          const fmlog = document.getElementById('fmLog');
+          if (fmlog) {
+            fmlog.className = 'log-box ok';
+            fmlog.textContent = 'EXTRACTED: ' + currentExtractArchivePath + ' → ' + d.destDir + ' (' + d.extractedCount + ' items in ' + d.duration + 's)';
+          }
+          fmList();
+        } else {
+          if (log) {
+            log.className = 'hint err';
+            log.textContent = 'Extract failed: ' + ((d && (d.error || d.output)) || 'Server error');
+          }
+        }
+      } catch (err) {
+        if (log) {
+          log.className = 'hint err';
+          log.textContent = 'Error: ' + err.message;
+        }
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '[EXTRACT_NOW]'; }
+      }
+    }
+
+    async function fmBulkExtract() {
+      const archives = [];
+      fmSelection.forEach((isDir, p) => {
+        if (!isDir && fmIsArchive(p)) archives.push(p);
+      });
+      if (!archives.length) {
+        showToast('⚠ No archive files selected');
+        return;
+      }
+      if (archives.length === 1) {
+        openExtractModal(archives[0]);
+        return;
+      }
+      if (!confirm('Extract ' + archives.length + ' selected archives into their respective subfolders?')) return;
+      const log = document.getElementById('fmLog');
+      log.className = 'log-box';
+      log.textContent = 'Extracting ' + archives.length + ' archive(s)…';
+      let ok = 0;
+      for (const arc of archives) {
+        const parent = parentPath(arc);
+        const base = arc.split('/').pop().replace(/\.(tar\.(gz|bz2|xz)|tgz|tbz2|txz|zip|7z|rar|gz|bz2|xz)$/i, '');
+        const dest = (parent === '/' ? '' : parent) + '/' + base;
+        try {
+          const r = await apiFetch('/api/files/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session: activeSession, archivePath: arc, destDir: dest })
+          });
+          const d = await r.json();
+          if (d && d.success) ok++;
+        } catch (_) {}
+      }
+      log.className = ok ? 'log-box ok' : 'log-box err';
+      log.textContent = 'Extracted ' + ok + ' of ' + archives.length + ' archive(s)';
+      showToast('✓ Extracted ' + ok + '/' + archives.length + ' archive(s)');
+      fmClearSelection();
+      fmList();
+    }
+
+    async function openArchiveViewModal(remotePath) {
+      currentViewArchivePath = remotePath;
+      currentArchiveEntriesList = [];
+      const heading = document.getElementById('arcViewHeading');
+      if (heading) heading.textContent = remotePath.split('/').pop() || remotePath;
+      const info = document.getElementById('arcViewInfo');
+      if (info) info.textContent = 'Loading archive contents…';
+      const body = document.getElementById('arcViewBody');
+      if (body) body.innerHTML = '<tr><td colspan="2" style="padding:12px;text-align:center;color:var(--cyan);">Reading archive header…</td></tr>';
+      const filterInput = document.getElementById('arcViewFilter');
+      if (filterInput) filterInput.value = '';
+
+      const modal = document.getElementById('archiveViewModal');
+      if (modal) modal.style.display = 'flex';
+
+      try {
+        const r = await apiFetch('/api/files/archive/list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: activeSession, archivePath: remotePath })
+        });
+        const d = await r.json();
+        if (d && d.success) {
+          currentArchiveEntriesList = d.files || [];
+          renderArchiveEntries(currentArchiveEntriesList);
+          if (info) info.textContent = currentArchiveEntriesList.length + ' file(s) found' + (d.totalCount > currentArchiveEntriesList.length ? ' (showing first 500)' : '');
+        } else {
+          if (body) body.innerHTML = '<tr><td colspan="2" style="padding:12px;color:var(--red);">' + esc((d && d.error) || 'Failed to read archive') + '</td></tr>';
+          if (info) info.textContent = 'Error reading archive';
+        }
+      } catch (err) {
+        if (body) body.innerHTML = '<tr><td colspan="2" style="padding:12px;color:var(--red);">' + esc(err.message) + '</td></tr>';
+        if (info) info.textContent = 'Error';
+      }
+    }
+
+    function renderArchiveEntries(entries) {
+      const body = document.getElementById('arcViewBody');
+      if (!body) return;
+      if (!entries.length) {
+        body.innerHTML = '<tr><td colspan="2" style="padding:12px;text-align:center;color:var(--muted);">No files match filter</td></tr>';
+        return;
+      }
+      body.innerHTML = entries.map(ent => {
+        const isDir = !!ent.is_dir;
+        return '<tr>' +
+          '<td style="padding:3px 8px;word-break:break-all;">' +
+            (isDir ? '<span style="color:var(--cyan);">📁 ' : '📄 ') + esc(ent.name) + (isDir ? '</span>' : '') +
+          '</td>' +
+          '<td style="padding:3px 8px;color:#8892b0;white-space:nowrap;">' +
+            (isDir ? 'DIR' : fmtSize(ent.size)) +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function filterArchiveEntries(text) {
+      const q = String(text || '').trim().toLowerCase();
+      if (!q) {
+        renderArchiveEntries(currentArchiveEntriesList);
+        return;
+      }
+      const filtered = currentArchiveEntriesList.filter(e => String(e.name || '').toLowerCase().includes(q));
+      renderArchiveEntries(filtered);
+    }
+
+    function closeArchiveViewModal() {
+      const modal = document.getElementById('archiveViewModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function extractFromViewModal() {
+      const p = currentViewArchivePath;
+      closeArchiveViewModal();
+      if (p) openExtractModal(p);
+    }
+
+    async function fmDownloadAsZip() {
+      const paths = Array.from(fmSelection.keys());
+      if (!paths.length) {
+        showToast('⚠ Select files or folders first');
+        return;
+      }
+      const log = document.getElementById('fmLog');
+      log.className = 'log-box';
+      log.textContent = 'Archiving ' + paths.length + ' item(s) to ZIP on VM…';
+      showToast('📦 Creating ZIP archive on VM…');
+
+      try {
+        const currentDir = (document.getElementById('fmPath').value || fmPath || '/content').trim() || '/content';
+        const d = new Date();
+        const stamp = d.getFullYear() +
+          String(d.getMonth() + 1).padStart(2, '0') +
+          String(d.getDate()).padStart(2, '0') + '_' +
+          String(d.getHours()).padStart(2, '0') +
+          String(d.getMinutes()).padStart(2, '0');
+        const zipName = 'download_' + stamp + '.zip';
+        const zipRemotePath = currentDir + '/' + zipName;
+
+        const r = await apiFetch('/api/files/archive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session: activeSession,
+            paths: paths,
+            archivePath: zipRemotePath,
+            format: 'zip',
+            baseDir: currentDir
+          })
+        });
+        const res = await r.json();
+        if (!res || !res.success) {
+          log.className = 'log-box err';
+          log.textContent = 'Archive failed: ' + ((res && res.error) || 'Unknown error');
+          showToast('❌ Archive failed');
+          return;
+        }
+
+        log.className = 'log-box ok';
+        log.textContent = 'Archive ready (' + fmtSize(res.size) + '). Starting download…';
+        fmList();
+        fmDownload(zipRemotePath);
+      } catch (err) {
+        log.className = 'log-box err';
+        log.textContent = 'Download as ZIP error: ' + err.message;
       }
     }
     async function fmUpload(ev) {
