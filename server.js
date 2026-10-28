@@ -776,16 +776,197 @@ app.get('/api/files/download', checkApiKey, async (req, res) => {
   const remotePath = req.query.path;
   if (!remotePath) return res.status(400).json({ error: 'path required' });
   if (remotePath.includes('..')) return res.status(400).json({ error: 'invalid path' });
-  const localTmp = path.join('/tmp', 'colab_dl_' + Date.now() + '_' + path.basename(remotePath).replace(/[^a-zA-Z0-9._-]/g, '_'));
-  const args = ['download'];
-  if (session) args.push('-s', session);
-  args.push(remotePath, localTmp);
-  const result = await runCommand('colab', args, null, 300000);
-  if (!result.success || !fs.existsSync(localTmp)) {
-    return res.status(500).json({ error: result.stderr || result.stdout || 'download failed' });
+
+  const filename = path.basename(remotePath);
+  const localTmp = path.join('/tmp', 'colab_dl_' + Date.now() + '_' + filename.replace(/[^a-zA-Z0-9._-]/g, '_'));
+
+  // 1. Inspect remote file stat (size & directory check)
+  let remoteSize = -1;
+  let isDir = false;
+  try {
+    const statPy = [
+      'import os, json, stat',
+      'p = ' + JSON.stringify(remotePath),
+      'try:',
+      '    st = os.stat(p)',
+      '    print(json.dumps({"ok": True, "size": st.st_size, "is_dir": stat.S_ISDIR(st.st_mode)}))',
+      'except Exception as e:',
+      '    print(json.dumps({"ok": False, "error": str(e)}))'
+    ].join('\n');
+    const args = ['exec'];
+    if (session) args.push('-s', session);
+    const statRes = await runCommand('colab', args, statPy, 20000);
+    const raw = (statRes.stdout || '').trim();
+    for (const line of raw.split('\n').reverse()) {
+      try {
+        const j = JSON.parse(line.trim());
+        if (j.ok) {
+          remoteSize = j.size;
+          isDir = !!j.is_dir;
+          break;
+        } else if (j.error && j.error.includes('No such file')) {
+          return res.status(404).json({ error: 'File not found on VM: ' + remotePath });
+        }
+      } catch (_) {}
+    }
+  } catch (statErr) {
+    console.warn('[DOWNLOAD STAT] Check failed:', statErr.message);
   }
-  res.download(localTmp, path.basename(remotePath), () => {
-    try { fs.unlinkSync(localTmp); } catch (e) {}
+
+  if (isDir) {
+    return res.status(400).json({ error: 'Cannot download a folder directly. Use [ARCHIVE] to pack it into a .zip first.' });
+  }
+
+  // 2. Fast-path: for small files (<= 12 MB), try standard colab download CLI
+  if (remoteSize >= 0 && remoteSize <= 12 * 1024 * 1024) {
+    const args = ['download'];
+    if (session) args.push('-s', session);
+    args.push(remotePath, localTmp);
+    const result = await runCommand('colab', args, null, 120000);
+    if (result.success && fs.existsSync(localTmp) && fs.statSync(localTmp).size > 0) {
+      return res.download(localTmp, filename, () => {
+        try { fs.unlinkSync(localTmp); } catch (_) {}
+      });
+    }
+  }
+
+  // 3. High-Capacity SSH binary stream transfer:
+  // Google Colab Contents API limits single-request payloads to ~16 MB.
+  // Over colab ssh --proxy-mode, we stream pure binary bytes directly from the VM's sshd,
+  // bypassing the 16 MB barrier completely (allowing multi-gigabyte files).
+  let sshDownloaded = false;
+  try {
+    const keyInfo = await sshKeyReady;
+    if (keyInfo.ok && fs.existsSync(SSH_KEY)) {
+      console.log(`[DOWNLOAD] Initiating SSH transfer for "${remotePath}" (size: ${remoteSize} bytes)`);
+      const proxyCmd = `colab ssh --proxy-mode ${session ? '-s ' + session : ''} -i ${SSH_KEY}`;
+      const sshArgs = [
+        '-i', SSH_KEY,
+        '-o', `ProxyCommand=${proxyCmd}`,
+        '-o', 'StrictHostKeyChecking=no',
+        '-o', 'UserKnownHostsFile=/dev/null',
+        '-o', 'LogLevel=ERROR',
+        '-o', 'ConnectTimeout=15',
+        'root@colab-runtime',
+        `cat -- ${JSON.stringify(remotePath)}`
+      ];
+
+      sshDownloaded = await new Promise((resolve) => {
+        const outStream = fs.createWriteStream(localTmp);
+        const sshProc = spawn('ssh', sshArgs);
+        let errorOutput = '';
+
+        sshProc.stdout.pipe(outStream);
+        sshProc.stderr.on('data', (d) => { errorOutput += d.toString(); });
+
+        // Dynamic timeout: 5 minutes base + 1 minute per 100 MB
+        const timeoutMs = Math.max(300000, 300000 + Math.ceil(Math.max(0, remoteSize) / (100 * 1024 * 1024)) * 60000);
+        const timer = setTimeout(() => {
+          try { sshProc.kill('SIGKILL'); } catch (_) {}
+          resolve(false);
+        }, timeoutMs);
+
+        sshProc.on('close', (code) => {
+          clearTimeout(timer);
+          outStream.end();
+          if (code === 0 && fs.existsSync(localTmp) && fs.statSync(localTmp).size > 0) {
+            resolve(true);
+          } else {
+            console.warn('[DOWNLOAD SSH FAIL] code:', code, 'stderr:', errorOutput);
+            try { fs.unlinkSync(localTmp); } catch (_) {}
+            resolve(false);
+          }
+        });
+
+        sshProc.on('error', (err) => {
+          clearTimeout(timer);
+          console.warn('[DOWNLOAD SSH ERROR]', err);
+          resolve(false);
+        });
+      });
+    }
+  } catch (sshErr) {
+    console.warn('[DOWNLOAD] SSH method failed:', sshErr.message);
+  }
+
+  if (sshDownloaded && fs.existsSync(localTmp)) {
+    console.log(`[DOWNLOAD] SSH transfer finished (${fs.statSync(localTmp).size} bytes)`);
+    return res.download(localTmp, filename, () => {
+      try { fs.unlinkSync(localTmp); } catch (_) {}
+    });
+  }
+
+  // 4. Reliable Fallback: Chunked Python download via colab exec
+  // Slices the file into 4 MB chunks on the VM, safely below the 16 MB proxy threshold.
+  console.log(`[DOWNLOAD] Attempting chunked Python download fallback for "${remotePath}"...`);
+  try {
+    const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB chunks
+    const outStream = fs.createWriteStream(localTmp);
+    let offset = 0;
+    let done = false;
+    let chunkOk = true;
+
+    while (!done && chunkOk) {
+      const chunkPy = [
+        'import base64',
+        'p = ' + JSON.stringify(remotePath),
+        'offset = ' + offset,
+        'size = ' + CHUNK_SIZE,
+        'with open(p, "rb") as f:',
+        '    f.seek(offset)',
+        '    data = f.read(size)',
+        'print("__CHUNK__:" + str(len(data)) + ":" + base64.b64encode(data).decode("ascii"))'
+      ].join('\n');
+
+      const args = ['exec'];
+      if (session) args.push('-s', session);
+      const cRes = await runCommand('colab', args, chunkPy, 60000);
+      if (!cRes.success) {
+        chunkOk = false;
+        break;
+      }
+
+      const match = (cRes.stdout || '').match(/__CHUNK__:(\d+):([A-Za-z0-9+/=]+)/);
+      if (!match) {
+        chunkOk = false;
+        break;
+      }
+
+      const readBytes = parseInt(match[1], 10);
+      const b64 = match[2];
+      if (readBytes > 0) {
+        const buf = Buffer.from(b64, 'base64');
+        outStream.write(buf);
+        offset += readBytes;
+      }
+      if (readBytes < CHUNK_SIZE) {
+        done = true;
+      }
+    }
+
+    outStream.end();
+    if (chunkOk && fs.existsSync(localTmp) && fs.statSync(localTmp).size > 0) {
+      console.log(`[DOWNLOAD] Chunked Python download succeeded (${fs.statSync(localTmp).size} bytes)`);
+      return res.download(localTmp, filename, () => {
+        try { fs.unlinkSync(localTmp); } catch (_) {}
+      });
+    }
+  } catch (pyErr) {
+    console.error('[DOWNLOAD] Chunked Python download error:', pyErr.message);
+  }
+
+  // 5. Last resort: try colab download if not tried yet
+  const lastTry = await runCommand('colab', session ? ['download', '-s', session, remotePath, localTmp] : ['download', remotePath, localTmp], null, 180000);
+  if (lastTry.success && fs.existsSync(localTmp)) {
+    return res.download(localTmp, filename, () => {
+      try { fs.unlinkSync(localTmp); } catch (_) {}
+    });
+  }
+
+  try { fs.unlinkSync(localTmp); } catch (_) {}
+  res.status(500).json({
+    error: 'Download failed: unable to transfer file through SSH streaming, chunked fallback, or colab CLI.',
+    details: lastTry.stderr || lastTry.stdout
   });
 });
 
@@ -1238,6 +1419,359 @@ app.post('/api/files/copy', checkApiKey, async (req, res) => {
     return res.json({ success: !!parsed.ok, path: parsed.path, error: parsed.error, raw });
   }
   res.json({ success: result.success, output: raw });
+});
+
+// --- Archive Operations (Packing, Extraction, Inspection) ---
+
+app.post('/api/files/archive', checkApiKey, async (req, res) => {
+  const session = req.body.session;
+  let paths = req.body.paths;
+  if (!paths && req.body.path) paths = [req.body.path];
+  if (!Array.isArray(paths) || paths.length === 0) {
+    return res.status(400).json({ error: 'paths array required' });
+  }
+
+  let archivePath = req.body.archivePath;
+  const name = req.body.name;
+  const destDir = (req.body.destDir || '/content').replace(/\/$/, '');
+  const fmt = (req.body.format || 'zip').toLowerCase();
+  const baseDir = req.body.baseDir || destDir || '/content';
+
+  if (!archivePath) {
+    let cleanName = (name || '').trim();
+    if (!cleanName) {
+      if (paths.length === 1) {
+        cleanName = path.basename(paths[0]).replace(/\.[^.]+$/, '');
+      } else {
+        const d = new Date();
+        const stamp = d.getFullYear() +
+          String(d.getMonth() + 1).padStart(2, '0') +
+          String(d.getDate()).padStart(2, '0') + '_' +
+          String(d.getHours()).padStart(2, '0') +
+          String(d.getMinutes()).padStart(2, '0');
+        cleanName = 'archive_' + stamp;
+      }
+    }
+    const ext = fmt === 'tar.gz' || fmt === 'gztar' ? '.tar.gz' :
+                fmt === 'tar.bz2' || fmt === 'bztar' ? '.tar.bz2' :
+                fmt === 'tar.xz' || fmt === 'xztar' ? '.tar.xz' :
+                fmt === 'tar' ? '.tar' :
+                fmt === '7z' ? '.7z' : '.zip';
+    if (!cleanName.endsWith(ext)) cleanName += ext;
+    archivePath = destDir + '/' + cleanName;
+  }
+
+  if (archivePath.includes('..')) return res.status(400).json({ error: 'invalid archivePath' });
+
+  const py = [
+    'import os, sys, json, time',
+    'paths = ' + JSON.stringify(paths),
+    'archive_path = ' + JSON.stringify(archivePath),
+    'fmt = ' + JSON.stringify(fmt),
+    'base_dir = ' + JSON.stringify(baseDir),
+    'result = {"ok": False, "archive_path": archive_path, "count": 0, "size": 0, "error": None}',
+    'start_time = time.time()',
+    'try:',
+    '    parent = os.path.dirname(archive_path)',
+    '    if parent and not os.path.exists(parent):',
+    '        os.makedirs(parent, exist_ok=True)',
+    '    if not base_dir or not os.path.exists(base_dir):',
+    '        base_dir = parent if parent else "/"',
+    '    valid_paths = [p for p in paths if os.path.exists(p)]',
+    '    if not valid_paths:',
+    '        raise ValueError("None of the specified files or directories exist.")',
+    '    files_added = 0',
+    '    if fmt == "zip" or archive_path.endswith(".zip"):',
+    '        import zipfile',
+    '        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:',
+    '            for p in valid_paths:',
+    '                if os.path.isdir(p):',
+    '                    for root, dirs, files in os.walk(p):',
+    '                        for d in dirs:',
+    '                            dp = os.path.join(root, d)',
+    '                            arcname = os.path.relpath(dp, base_dir)',
+    '                            zf.write(dp, arcname)',
+    '                        for f in files:',
+    '                            fp = os.path.join(root, f)',
+    '                            arcname = os.path.relpath(fp, base_dir)',
+    '                            zf.write(fp, arcname)',
+    '                            files_added += 1',
+    '                        if not dirs and not files:',
+    '                            arcname = os.path.relpath(root, base_dir)',
+    '                            zf.write(root, arcname)',
+    '                else:',
+    '                    arcname = os.path.relpath(p, base_dir)',
+    '                    zf.write(p, arcname)',
+    '                    files_added += 1',
+    '    elif fmt in ("tar.gz", "tgz", "gztar") or archive_path.endswith((".tar.gz", ".tgz")):',
+    '        import tarfile',
+    '        with tarfile.open(archive_path, "w:gz") as tf:',
+    '            for p in valid_paths:',
+    '                arcname = os.path.relpath(p, base_dir)',
+    '                tf.add(p, arcname=arcname)',
+    '                if os.path.isdir(p):',
+    '                    for _, _, files in os.walk(p): files_added += len(files)',
+    '                else:',
+    '                    files_added += 1',
+    '    elif fmt in ("tar.bz2", "tbz2", "bztar") or archive_path.endswith((".tar.bz2", ".tbz2")):',
+    '        import tarfile',
+    '        with tarfile.open(archive_path, "w:bz2") as tf:',
+    '            for p in valid_paths:',
+    '                arcname = os.path.relpath(p, base_dir)',
+    '                tf.add(p, arcname=arcname)',
+    '                if os.path.isdir(p):',
+    '                    for _, _, files in os.walk(p): files_added += len(files)',
+    '                else:',
+    '                    files_added += 1',
+    '    elif fmt in ("tar.xz", "txz", "xztar") or archive_path.endswith((".tar.xz", ".txz")):',
+    '        import tarfile',
+    '        with tarfile.open(archive_path, "w:xz") as tf:',
+    '            for p in valid_paths:',
+    '                arcname = os.path.relpath(p, base_dir)',
+    '                tf.add(p, arcname=arcname)',
+    '                if os.path.isdir(p):',
+    '                    for _, _, files in os.walk(p): files_added += len(files)',
+    '                else:',
+    '                    files_added += 1',
+    '    elif fmt == "tar" or archive_path.endswith(".tar"):',
+    '        import tarfile',
+    '        with tarfile.open(archive_path, "w") as tf:',
+    '            for p in valid_paths:',
+    '                arcname = os.path.relpath(p, base_dir)',
+    '                tf.add(p, arcname=arcname)',
+    '                if os.path.isdir(p):',
+    '                    for _, _, files in os.walk(p): files_added += len(files)',
+    '                else:',
+    '                    files_added += 1',
+    '    elif fmt == "7z" or archive_path.endswith(".7z"):',
+    '        import subprocess, shutil',
+    '        if not shutil.which("7z"):',
+    '            subprocess.run(["apt-get", "update", "-qq"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)',
+    '            subprocess.run(["apt-get", "install", "-y", "-qq", "p7zip-full"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)',
+    '        rel_paths = [os.path.relpath(p, base_dir) for p in valid_paths]',
+    '        cmd = ["7z", "a", "-y", archive_path] + rel_paths',
+    '        cp = subprocess.run(cmd, cwd=base_dir, capture_output=True, text=True)',
+    '        if cp.returncode != 0:',
+    '            raise RuntimeError("7z failed: " + cp.stderr)',
+    '        files_added = len(valid_paths)',
+    '    else:',
+    '        import zipfile',
+    '        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:',
+    '            for p in valid_paths:',
+    '                arcname = os.path.relpath(p, base_dir)',
+    '                zf.write(p, arcname)',
+    '                files_added += 1',
+    '    st = os.stat(archive_path)',
+    '    result["ok"] = True',
+    '    result["archive_path"] = archive_path',
+    '    result["count"] = files_added',
+    '    result["size"] = st.st_size',
+    '    result["duration"] = round(time.time() - start_time, 2)',
+    'except Exception as ex:',
+    '    result["error"] = str(ex)',
+    'print(json.dumps(result))'
+  ].join('\n');
+
+  const args = ['exec'];
+  if (session) args.push('-s', session);
+  const result = await runCommand('colab', args, py, 180000);
+  const raw = (result.stdout || result.stderr || '').trim();
+  let parsed = null;
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try { parsed = JSON.parse(lines[i]); break; } catch (e) {}
+  }
+  if (parsed) {
+    return res.json({
+      success: !!parsed.ok,
+      archivePath: parsed.archive_path || archivePath,
+      size: parsed.size || 0,
+      count: parsed.count || 0,
+      duration: parsed.duration || 0,
+      error: parsed.error,
+      raw
+    });
+  }
+  res.json({ success: result.success, output: raw, archivePath });
+});
+
+app.post('/api/files/extract', checkApiKey, async (req, res) => {
+  const session = req.body.session;
+  const archivePath = req.body.archivePath || req.body.path;
+  if (!archivePath) return res.status(400).json({ error: 'archivePath required' });
+  if (archivePath.includes('..')) return res.status(400).json({ error: 'invalid path' });
+
+  let destDir = req.body.destDir;
+  if (!destDir) {
+    const parent = path.dirname(archivePath);
+    const base = path.basename(archivePath).replace(/\.(tar\.(gz|bz2|xz)|tgz|tbz2|txz|zip|7z|rar|gz|bz2|xz)$/i, '');
+    destDir = path.join(parent, base);
+  }
+  if (destDir.includes('..')) return res.status(400).json({ error: 'invalid destDir' });
+
+  const removeAfter = Boolean(req.body.removeAfter);
+
+  const py = [
+    'import os, sys, json, time, shutil',
+    'archive_path = ' + JSON.stringify(archivePath),
+    'dest_dir = ' + JSON.stringify(destDir),
+    'remove_after = ' + (removeAfter ? 'True' : 'False'),
+    'result = {"ok": False, "dest_dir": dest_dir, "extracted_count": 0, "error": None}',
+    'start_time = time.time()',
+    'try:',
+    '    if not os.path.exists(archive_path):',
+    '        raise FileNotFoundError(f"Archive not found: {archive_path}")',
+    '    os.makedirs(dest_dir, exist_ok=True)',
+    '    low_name = archive_path.lower()',
+    '    extracted_count = 0',
+    '    if low_name.endswith(".zip"):',
+    '        import zipfile',
+    '        with zipfile.ZipFile(archive_path, "r") as zf:',
+    '            zf.extractall(dest_dir)',
+    '            extracted_count = len(zf.namelist())',
+    '    elif low_name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar")):',
+    '        import tarfile',
+    '        with tarfile.open(archive_path, "r:*") as tf:',
+    '            if hasattr(tarfile, "data_filter"):',
+    '                tf.extractall(dest_dir, filter="data")',
+    '            else:',
+    '                tf.extractall(dest_dir)',
+    '            extracted_count = len(tf.getnames())',
+    '    elif low_name.endswith((".7z", ".rar")):',
+    '        import subprocess',
+    '        if low_name.endswith(".7z"):',
+    '            if not shutil.which("7z"):',
+    '                subprocess.run(["apt-get", "update", "-qq"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)',
+    '                subprocess.run(["apt-get", "install", "-y", "-qq", "p7zip-full"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)',
+    '            cmd = ["7z", "x", "-y", f"-o{dest_dir}", archive_path]',
+    '            cp = subprocess.run(cmd, capture_output=True, text=True)',
+    '            if cp.returncode != 0:',
+    '                raise RuntimeError("7z extract failed: " + cp.stderr)',
+    '        else:',
+    '            if not shutil.which("unrar"):',
+    '                subprocess.run(["apt-get", "update", "-qq"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)',
+    '                subprocess.run(["apt-get", "install", "-y", "-qq", "unrar-free"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)',
+    '            cmd = ["unrar", "x", "-y", archive_path, dest_dir + "/"]',
+    '            cp = subprocess.run(cmd, capture_output=True, text=True)',
+    '            if cp.returncode != 0 and shutil.which("7z"):',
+    '                cp = subprocess.run(["7z", "x", "-y", f"-o{dest_dir}", archive_path], capture_output=True, text=True)',
+    '            if cp.returncode != 0:',
+    '                raise RuntimeError("unrar failed: " + cp.stderr)',
+    '        extracted_count = len(os.listdir(dest_dir))',
+    '    elif low_name.endswith((".gz", ".bz2", ".xz")):',
+    '        base_name = os.path.basename(archive_path)',
+    '        out_name = base_name.rsplit(".", 1)[0]',
+    '        out_path = os.path.join(dest_dir, out_name)',
+    '        if low_name.endswith(".gz"):',
+    '            import gzip',
+    '            with gzip.open(archive_path, "rb") as f_in, open(out_path, "wb") as f_out:',
+    '                shutil.copyfileobj(f_in, f_out)',
+    '        elif low_name.endswith(".bz2"):',
+    '            import bz2',
+    '            with bz2.open(archive_path, "rb") as f_in, open(out_path, "wb") as f_out:',
+    '                shutil.copyfileobj(f_in, f_out)',
+    '        elif low_name.endswith(".xz"):',
+    '            import lzma',
+    '            with lzma.open(archive_path, "rb") as f_in, open(out_path, "wb") as f_out:',
+    '                shutil.copyfileobj(f_in, f_out)',
+    '        extracted_count = 1',
+    '    else:',
+    '        shutil.unpack_archive(archive_path, dest_dir)',
+    '        extracted_count = len(os.listdir(dest_dir))',
+    '    if remove_after:',
+    '        try: os.remove(archive_path)',
+    '        except Exception: pass',
+    '    result["ok"] = True',
+    '    result["dest_dir"] = dest_dir',
+    '    result["extracted_count"] = extracted_count',
+    '    result["duration"] = round(time.time() - start_time, 2)',
+    'except Exception as ex:',
+    '    result["error"] = str(ex)',
+    'print(json.dumps(result))'
+  ].join('\n');
+
+  const args = ['exec'];
+  if (session) args.push('-s', session);
+  const result = await runCommand('colab', args, py, 180000);
+  const raw = (result.stdout || result.stderr || '').trim();
+  let parsed = null;
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try { parsed = JSON.parse(lines[i]); break; } catch (e) {}
+  }
+  if (parsed) {
+    return res.json({
+      success: !!parsed.ok,
+      destDir: parsed.dest_dir || destDir,
+      extractedCount: parsed.extracted_count || 0,
+      duration: parsed.duration || 0,
+      error: parsed.error,
+      raw
+    });
+  }
+  res.json({ success: result.success, output: raw });
+});
+
+app.post('/api/files/archive/list', checkApiKey, async (req, res) => {
+  const session = req.body.session;
+  const archivePath = req.body.archivePath || req.body.path;
+  if (!archivePath) return res.status(400).json({ error: 'archivePath required' });
+
+  const py = [
+    'import os, sys, json',
+    'archive_path = ' + JSON.stringify(archivePath),
+    'result = {"ok": False, "files": [], "error": None}',
+    'try:',
+    '    if not os.path.exists(archive_path):',
+    '        raise FileNotFoundError(f"Archive not found: {archive_path}")',
+    '    low = archive_path.lower()',
+    '    files = []',
+    '    if low.endswith(".zip"):',
+    '        import zipfile',
+    '        with zipfile.ZipFile(archive_path, "r") as zf:',
+    '            for info in zf.infolist():',
+    '                files.append({',
+    '                    "name": info.filename,',
+    '                    "size": info.file_size,',
+    '                    "compressed_size": info.compress_size,',
+    '                    "is_dir": info.is_dir()',
+    '                })',
+    '    elif low.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar")):',
+    '        import tarfile',
+    '        with tarfile.open(archive_path, "r:*") as tf:',
+    '            for m in tf.getmembers():',
+    '                files.append({',
+    '                    "name": m.name,',
+    '                    "size": m.size,',
+    '                    "is_dir": m.isdir()',
+    '                })',
+    '    result["ok"] = True',
+    '    result["files"] = files[:500]',
+    '    result["total_count"] = len(files)',
+    'except Exception as ex:',
+    '    result["error"] = str(ex)',
+    'print(json.dumps(result))'
+  ].join('\n');
+
+  const args = ['exec'];
+  if (session) args.push('-s', session);
+  const result = await runCommand('colab', args, py, 30000);
+  const raw = (result.stdout || result.stderr || '').trim();
+  let parsed = null;
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try { parsed = JSON.parse(lines[i]); break; } catch (e) {}
+  }
+  if (parsed) {
+    return res.json({
+      success: !!parsed.ok,
+      files: parsed.files || [],
+      totalCount: parsed.total_count || 0,
+      error: parsed.error,
+      raw
+    });
+  }
+  res.json({ success: result.success, output: raw, files: [] });
 });
 
 
