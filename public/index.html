@@ -1555,34 +1555,60 @@
         <div id="sessionCreateLog" class="log-box">Create a session to see Colab CLI output (queue, tier limits, errors)…</div>
       </div>
 
-      <!-- AUTO-INSTALL PACKAGES ON RUNTIME CREATION -->
+      <!-- AUTO-INSTALL PACKAGES & ZIP ARCHIVE ON RUNTIME CREATION -->
       <div class="card" id="cardAutoInstall">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
-          <span>POST-CREATION PACKAGES (AUTO-INSTALL)</span>
-          <label style="font-size:11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;color:var(--text-dim);font-weight:normal;">
-            <input type="checkbox" id="autoInstallEnabled" checked style="width:auto;margin:0;" onchange="saveAutoInstallConfig()" />
-            [ AUTO-INSTALL ON CREATE ]
-          </label>
-        </div>
-        <p class="hint" style="margin-bottom:8px;">
-          Specify packages to install immediately upon instance creation. System tools (e.g. <code>mc</code>) are installed via <code>apt-get</code>, Python libraries via <code>colab install</code> (uv/pip). Saved automatically &amp; synced with Auth&amp;Config import/export.
-        </p>
-        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;">
-          <div>
-            <label class="stat-label">SYSTEM PACKAGES (APT) — e.g. mc htop tmux</label>
-            <input type="text" id="autoInstallApt" placeholder="mc tmux" oninput="saveAutoInstallConfig()" />
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;cursor:pointer;" onclick="toggleAutoInstallCard(event)">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="autoInstallChevron" style="font-family:monospace;font-size:12px;color:var(--cyan);display:inline-block;transition:transform 0.2s;">▶</span>
+            <span>POST-CREATION (PACKAGES &amp; ZIP)</span>
           </div>
-          <div>
-            <label class="stat-label">PYTHON PACKAGES (UV / PIP) — e.g. base64 pathlib</label>
-            <input type="text" id="autoInstallPip" placeholder="packages..." oninput="saveAutoInstallConfig()" />
+          <div style="display:inline-flex;align-items:center;gap:10px;" onclick="event.stopPropagation()">
+            <label style="font-size:11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;color:var(--text-dim);font-weight:normal;">
+              <input type="checkbox" id="autoInstallEnabled" checked style="width:auto;margin:0;" onchange="saveAutoInstallConfig()" />
+              [ AUTO-RUN ON CREATE ]
+            </label>
           </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
-          <button class="btn btn-cyan" id="btnInstallPackagesNow" type="button" onclick="installPackagesManual()">[INSTALL_NOW_ACTIVE_SESSION]</button>
-          <button class="btn" type="button" onclick="resetAutoInstallConfig()">[RESET_DEFAULT]</button>
-          <span id="autoInstallStatus" class="hint" style="margin-left:auto;"></span>
+
+        <div id="autoInstallBody" style="display:none;flex-direction:column;gap:10px;">
+          <p class="hint" style="margin-bottom:0;">
+            Tasks executed immediately upon instance creation. Packages are installed first, then the ZIP archive is unpacked into <code>/content</code>, original <code>.zip</code> is removed, and any <code>.sh</code> script is executed live in the SSH terminal.
+          </p>
+          <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px;">
+            <div>
+              <label class="stat-label">SYSTEM PACKAGES (APT) — e.g. mc htop tmux</label>
+              <input type="text" id="autoInstallApt" placeholder="mc tmux" oninput="saveAutoInstallConfig()" />
+            </div>
+            <div>
+              <label class="stat-label">PYTHON PACKAGES (UV / PIP) — e.g. base64 pathlib</label>
+              <input type="text" id="autoInstallPip" placeholder="packages..." oninput="saveAutoInstallConfig()" />
+            </div>
+          </div>
+
+          <!-- ZIP ARCHIVE & BASH SCRIPT SECTION -->
+          <div style="border-top:1px dashed var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+              <label class="stat-label" style="margin:0;">ZIP ARCHIVE (UNPACK TO /content &amp; RUN .SH IN SSH)</label>
+              <span id="zipFileSelectedInfo" class="hint" style="color:var(--cyan);font-size:11px;"></span>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              <input type="text" id="autoInstallZipUrl" placeholder="Direct link (URL) to .zip or choose file from smartphone…" style="flex:1;min-width:200px;" oninput="onZipUrlInputChanged()" />
+              <button class="btn btn-cyan" type="button" onclick="document.getElementById('autoInstallZipFileInput').click()" title="Select .zip file from smartphone storage">[CHOOSE_ZIP]</button>
+              <button class="btn" id="btnClearZip" type="button" onclick="clearSelectedZip()" title="Clear selected zip" style="display:none;">[CLEAR]</button>
+              <input type="file" id="autoInstallZipFileInput" accept=".zip,application/zip,application/x-zip-compressed" style="display:none;" onchange="onZipFileSelected(event)" />
+            </div>
+            <p class="hint" style="margin:0;">
+              Upload a <code>.zip</code> from your smartphone or paste a download link. Files and subfolders unpack to <code>/content</code>, the <code>.zip</code> is deleted, and the bash script (<code>.sh</code>) runs in SSH.
+            </p>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-cyan" id="btnInstallPackagesNow" type="button" onclick="runPostCreationManual()">[RUN_POST_CREATION_ACTIVE_SESSION]</button>
+            <button class="btn" type="button" onclick="resetAutoInstallConfig()">[RESET_DEFAULT]</button>
+            <span id="autoInstallStatus" class="hint" style="margin-left:auto;"></span>
+          </div>
+          <div id="autoInstallLog" class="log-box" style="display:none;margin-top:4px;"></div>
         </div>
-        <div id="autoInstallLog" class="log-box" style="display:none;margin-top:8px;"></div>
       </div>
 
       <div id="sessionsListContainer"></div>
@@ -3584,7 +3610,8 @@
           autoInstall: {
             enabled: document.getElementById('autoInstallEnabled') ? document.getElementById('autoInstallEnabled').checked : (localStorage.getItem('colab_auto_install_enabled') !== 'false'),
             apt: document.getElementById('autoInstallApt') ? document.getElementById('autoInstallApt').value : (localStorage.getItem('colab_auto_install_apt') || 'mc tmux'),
-            pip: document.getElementById('autoInstallPip') ? document.getElementById('autoInstallPip').value : (localStorage.getItem('colab_auto_install_pip') || '')
+            pip: document.getElementById('autoInstallPip') ? document.getElementById('autoInstallPip').value : (localStorage.getItem('colab_auto_install_pip') || ''),
+            zipUrl: document.getElementById('autoInstallZipUrl') ? document.getElementById('autoInstallZipUrl').value : (localStorage.getItem('colab_auto_install_zip_url') || '')
           },
           layout: {
             arrowsPos: arrowsPos,
@@ -3700,7 +3727,7 @@
             restoredParts.push('Layout');
           }
 
-          // Auto-install packages configuration
+          // Auto-install packages & ZIP archive configuration
           const autoInstallCfg = settings.autoInstall || data.colab_auto_install || data.autoInstall;
           if (autoInstallCfg && typeof autoInstallCfg === 'object') {
             if (autoInstallCfg.enabled !== undefined) {
@@ -3712,8 +3739,11 @@
             if (typeof autoInstallCfg.pip === 'string') {
               localStorage.setItem('colab_auto_install_pip', autoInstallCfg.pip);
             }
+            if (typeof autoInstallCfg.zipUrl === 'string') {
+              localStorage.setItem('colab_auto_install_zip_url', autoInstallCfg.zipUrl);
+            }
             if (typeof loadAutoInstallConfig === 'function') loadAutoInstallConfig();
-            restoredParts.push('Auto-Install Packages');
+            restoredParts.push('Post-Creation Packages & ZIP');
           }
 
           // 2. Commands templates (supports both full backup format and legacy commands-only format)
@@ -4320,11 +4350,13 @@
             try { term.reset(); } catch (e) {}
             termTranscript = '';
             sendResize();
+            if (typeof window._checkPendingSshCommand === 'function') window._checkPendingSshCommand();
             return;
           }
           term.writeln('\x1b[32m[ssh ready]\x1b[0m');
           appendTranscript('[ssh ready]\n');
           sendResize();
+          if (typeof window._checkPendingSshCommand === 'function') window._checkPendingSshCommand();
         } else if (msg.type === 'error') {
           ptyNoRetry = true;
           term.writeln('\x1b[31m[error] ' + (msg.data || '') + '\x1b[0m');
@@ -4657,26 +4689,175 @@
       }
     }
 
+    function toggleAutoInstallCard(ev) {
+      const body = document.getElementById('autoInstallBody');
+      const chevron = document.getElementById('autoInstallChevron');
+      if (!body) return;
+      const isCollapsed = (body.style.display === 'none' || !body.style.display);
+      body.style.display = isCollapsed ? 'flex' : 'none';
+      if (chevron) chevron.textContent = isCollapsed ? '▼' : '▶';
+    }
+
     function isAutoInstallEnabled() {
       const cb = document.getElementById('autoInstallEnabled');
       if (cb) return cb.checked;
       return localStorage.getItem('colab_auto_install_enabled') !== 'false';
     }
 
+    // --- IndexedDB for Smartphone ZIP Archive ---
+    let memorySelectedZip = null;
+
+    function getZipDb() {
+      return new Promise((resolve) => {
+        if (!window.indexedDB) return resolve(null);
+        try {
+          const req = indexedDB.open('colabdroid_post_creation', 1);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('blobs')) {
+              db.createObjectStore('blobs');
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        } catch (_) {
+          resolve(null);
+        }
+      });
+    }
+
+    async function saveZipToDb(file) {
+      memorySelectedZip = file;
+      const db = await getZipDb();
+      if (!db) return;
+      try {
+        const tx = db.transaction('blobs', 'readwrite');
+        tx.objectStore('blobs').put({
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          data: file,
+          updatedAt: Date.now()
+        }, 'current_zip');
+      } catch (e) {
+        console.warn('[ZIP DB] save error:', e);
+      }
+    }
+
+    async function loadZipFromDb() {
+      if (memorySelectedZip) return { file: memorySelectedZip };
+      const db = await getZipDb();
+      if (!db) return null;
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction('blobs', 'readonly');
+          const req = tx.objectStore('blobs').get('current_zip');
+          req.onsuccess = () => {
+            if (req.result && req.result.data) {
+              memorySelectedZip = req.result.data;
+              if (!memorySelectedZip.name && req.result.name) {
+                try { memorySelectedZip.name = req.result.name; } catch (_) {}
+              }
+              resolve({ file: memorySelectedZip, meta: req.result });
+            } else {
+              resolve(null);
+            }
+          };
+          req.onerror = () => resolve(null);
+        } catch (_) {
+          resolve(null);
+        }
+      });
+    }
+
+    async function clearZipFromDb() {
+      memorySelectedZip = null;
+      const db = await getZipDb();
+      if (!db) return;
+      try {
+        const tx = db.transaction('blobs', 'readwrite');
+        tx.objectStore('blobs').delete('current_zip');
+      } catch (_) {}
+    }
+
+    function updateZipUI(nameOrUrl, size) {
+      const info = document.getElementById('zipFileSelectedInfo');
+      const btnClear = document.getElementById('btnClearZip');
+      if (!nameOrUrl) {
+        if (info) info.textContent = '';
+        if (btnClear) btnClear.style.display = 'none';
+        return;
+      }
+      if (btnClear) btnClear.style.display = 'inline-block';
+      if (info) {
+        if (size != null) {
+          info.textContent = `✓ ${nameOrUrl} (${fmtSize(size)})`;
+        } else if (nameOrUrl.startsWith('http://') || nameOrUrl.startsWith('https://')) {
+          info.textContent = `✓ Remote URL`;
+        } else {
+          info.textContent = `✓ ${nameOrUrl}`;
+        }
+      }
+    }
+
+    async function onZipFileSelected(ev) {
+      const input = ev.target;
+      const file = input.files && input.files[0];
+      if (!file) return;
+
+      await saveZipToDb(file);
+      const urlInput = document.getElementById('autoInstallZipUrl');
+      if (urlInput) {
+        urlInput.value = file.name;
+      }
+      localStorage.setItem('colab_auto_install_zip_url', file.name);
+      updateZipUI(file.name, file.size);
+      saveAutoInstallConfig();
+      showToast('✓ ZIP selected: ' + file.name);
+    }
+
+    function onZipUrlInputChanged() {
+      const urlInput = document.getElementById('autoInstallZipUrl');
+      const val = urlInput ? urlInput.value.trim() : '';
+      if (val.startsWith('http://') || val.startsWith('https://')) {
+        clearZipFromDb();
+        updateZipUI(val, null);
+      } else if (!val) {
+        clearZipFromDb();
+        updateZipUI('', null);
+      }
+      saveAutoInstallConfig();
+    }
+
+    async function clearSelectedZip() {
+      await clearZipFromDb();
+      const urlInput = document.getElementById('autoInstallZipUrl');
+      const fileInput = document.getElementById('autoInstallZipFileInput');
+      if (urlInput) urlInput.value = '';
+      if (fileInput) fileInput.value = '';
+      localStorage.removeItem('colab_auto_install_zip_url');
+      updateZipUI('', null);
+      saveAutoInstallConfig();
+      showToast('ZIP selection cleared');
+    }
+
     function saveAutoInstallConfig() {
       const cb = document.getElementById('autoInstallEnabled');
       const aptInput = document.getElementById('autoInstallApt');
       const pipInput = document.getElementById('autoInstallPip');
+      const zipUrlInput = document.getElementById('autoInstallZipUrl');
       const status = document.getElementById('autoInstallStatus');
 
       const enabled = cb ? cb.checked : true;
       const aptVal = aptInput ? aptInput.value.trim() : '';
       const pipVal = pipInput ? pipInput.value.trim() : '';
+      const zipVal = zipUrlInput ? zipUrlInput.value.trim() : '';
 
       try {
         localStorage.setItem('colab_auto_install_enabled', enabled ? 'true' : 'false');
         localStorage.setItem('colab_auto_install_apt', aptVal);
         localStorage.setItem('colab_auto_install_pip', pipVal);
+        localStorage.setItem('colab_auto_install_zip_url', zipVal);
         if (status) {
           status.style.color = 'var(--cyan)';
           status.textContent = '✓ Saved';
@@ -4690,77 +4871,314 @@
       }
     }
 
-    function loadAutoInstallConfig() {
+    async function loadAutoInstallConfig() {
       const cb = document.getElementById('autoInstallEnabled');
       const aptInput = document.getElementById('autoInstallApt');
       const pipInput = document.getElementById('autoInstallPip');
+      const zipUrlInput = document.getElementById('autoInstallZipUrl');
 
       const savedEnabled = localStorage.getItem('colab_auto_install_enabled');
       const savedApt = localStorage.getItem('colab_auto_install_apt');
       const savedPip = localStorage.getItem('colab_auto_install_pip');
+      const savedZipUrl = localStorage.getItem('colab_auto_install_zip_url');
 
       if (cb) cb.checked = (savedEnabled !== 'false');
       if (aptInput) aptInput.value = (savedApt !== null) ? savedApt : 'mc tmux';
       if (pipInput) pipInput.value = (savedPip !== null) ? savedPip : '';
+      if (zipUrlInput) zipUrlInput.value = (savedZipUrl !== null) ? savedZipUrl : '';
+
+      const stored = await loadZipFromDb();
+      if (stored && stored.file) {
+        const f = stored.file;
+        const name = f.name || (stored.meta && stored.meta.name) || (savedZipUrl || 'archive.zip');
+        if (zipUrlInput && !zipUrlInput.value) zipUrlInput.value = name;
+        updateZipUI(name, f.size || (stored.meta && stored.meta.size));
+      } else if (savedZipUrl) {
+        updateZipUI(savedZipUrl, null);
+      } else {
+        updateZipUI('', null);
+      }
     }
 
-    function resetAutoInstallConfig() {
+    async function resetAutoInstallConfig() {
       const cb = document.getElementById('autoInstallEnabled');
       const aptInput = document.getElementById('autoInstallApt');
       const pipInput = document.getElementById('autoInstallPip');
+      const zipUrlInput = document.getElementById('autoInstallZipUrl');
+      const fileInput = document.getElementById('autoInstallZipFileInput');
+
       if (cb) cb.checked = true;
       if (aptInput) aptInput.value = 'mc tmux';
       if (pipInput) pipInput.value = '';
+      if (zipUrlInput) zipUrlInput.value = '';
+      if (fileInput) fileInput.value = '';
+
+      await clearZipFromDb();
+      updateZipUI('', null);
       saveAutoInstallConfig();
-      showToast('Auto-install reset to default (mc tmux)');
+      showToast('Post-creation reset to default');
     }
 
+    // --- SSH Terminal Automatic Execution ---
+    window._pendingSshCommand = null;
+    window._checkPendingSshCommand = function() {
+      if (!window._pendingSshCommand) return;
+      const cmd = window._pendingSshCommand;
+      window._pendingSshCommand = null;
+      setTimeout(() => {
+        const activeWs = getActivePtyWs();
+        if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+          activeWs.send(JSON.stringify({ type: 'stdin', data: cmd + '\r' }));
+          if (typeof term !== 'undefined' && term) term.focus();
+        }
+      }, 700);
+    };
+
+    function executeInSshTerminal(cmd) {
+      switchTab('terminal');
+      if (termMode !== 'pty') {
+        setTermMode('pty');
+      }
+      const activeWs = getActivePtyWs();
+      if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+        setTimeout(() => {
+          activeWs.send(JSON.stringify({ type: 'stdin', data: cmd + '\r' }));
+          if (typeof term !== 'undefined' && term) term.focus();
+        }, 500);
+      } else {
+        window._pendingSshCommand = cmd;
+        let checks = 0;
+        const poll = setInterval(() => {
+          checks++;
+          const curWs = getActivePtyWs();
+          if (curWs && curWs.readyState === WebSocket.OPEN) {
+            clearInterval(poll);
+            if (window._pendingSshCommand === cmd) {
+              window._pendingSshCommand = null;
+              setTimeout(() => {
+                curWs.send(JSON.stringify({ type: 'stdin', data: cmd + '\r' }));
+                if (typeof term !== 'undefined' && term) term.focus();
+              }, 500);
+            }
+          } else if (checks > 60) {
+            clearInterval(poll);
+          }
+        }, 400);
+      }
+    }
+
+    // --- Post-Creation Workflow: Packages -> ZIP Deploy -> SSH Launch ---
     async function runAutoInstall(sessionName) {
+      return runPostCreationWorkflow(sessionName);
+    }
+
+    async function runPostCreationWorkflow(sessionName) {
       if (!sessionName) return;
+
       const aptVal = (document.getElementById('autoInstallApt')?.value || localStorage.getItem('colab_auto_install_apt') || '').trim();
       const pipVal = (document.getElementById('autoInstallPip')?.value || localStorage.getItem('colab_auto_install_pip') || '').trim();
+      const zipUrlVal = (document.getElementById('autoInstallZipUrl')?.value || localStorage.getItem('colab_auto_install_zip_url') || '').trim();
+      const storedZip = await loadZipFromDb();
+      const hasLocalZip = Boolean(storedZip && (storedZip.file || (storedZip instanceof Blob)));
+      const hasRemoteZip = Boolean(zipUrlVal && (zipUrlVal.startsWith('http://') || zipUrlVal.startsWith('https://')));
+      const hasZip = hasLocalZip || hasRemoteZip || Boolean(zipUrlVal);
 
-      if (!aptVal && !pipVal) return;
+      if (!aptVal && !pipVal && !hasZip) return;
+
+      const body = document.getElementById('autoInstallBody');
+      const chevron = document.getElementById('autoInstallChevron');
+      if (body) { body.style.display = 'flex'; if (chevron) chevron.textContent = '▼'; }
 
       const log = document.getElementById('autoInstallLog');
       if (log) {
         log.style.display = 'block';
         log.className = 'log-box';
-        log.textContent = `[AUTO-INSTALL] Installing packages on "${sessionName}"…\n` +
+        log.textContent = `[POST-CREATION] Starting workflow on "${sessionName}"…\n` +
           (aptVal ? `• APT packages: ${aptVal}\n` : '') +
-          (pipVal ? `• Python packages (colab install): ${pipVal}\n` : '') +
-          `Please wait (may take 1-2 min)…\n`;
+          (pipVal ? `• Python packages: ${pipVal}\n` : '') +
+          (hasZip ? `• ZIP Archive: ${hasLocalZip ? (storedZip.file?.name || 'Local Smartphone File') : zipUrlVal}\n` : '') +
+          `Please wait…\n\n`;
       }
 
-      try {
-        const r = await apiFetch('/api/install', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session: sessionName,
-            aptPackages: aptVal || undefined,
-            packages: pipVal || undefined
-          })
-        });
-        const d = await r.json();
-        const ok = !!(d && d.success);
-        if (log) {
-          log.className = 'log-box ' + (ok ? 'ok' : 'err');
-          log.textContent = `[AUTO-INSTALL] ${ok ? 'SUCCESS' : 'FINISHED WITH WARNINGS'} on "${sessionName}"\n` +
-            `Duration: ${d && d.durationMs != null ? d.durationMs + ' ms' : '—'}\n\n` +
-            ((d && (d.output || d.error)) || JSON.stringify(d, null, 2));
+      // Step 1: Install packages
+      if (aptVal || pipVal) {
+        try {
+          if (log) log.textContent += `[1/2] Installing packages (APT / PIP)…\n`;
+          const r = await apiFetch('/api/install', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session: sessionName,
+              aptPackages: aptVal || undefined,
+              packages: pipVal || undefined
+            })
+          });
+          const d = await r.json();
+          const ok = !!(d && d.success);
+          if (log) {
+            log.textContent += `✓ Packages install ${ok ? 'succeeded' : 'finished with warnings'}.\n\n`;
+          }
+        } catch (err) {
+          if (log) log.textContent += `⚠ Package install warning: ${err.message}\n\n`;
         }
-        showToast(ok ? ('✓ Packages installed on ' + sessionName) : ('⚠ Install finished with warnings on ' + sessionName));
-      } catch (err) {
-        if (log) {
-          log.className = 'log-box err';
-          log.textContent = `[AUTO-INSTALL ERROR] ${err.message}`;
+      }
+
+      // Step 2: Deploy ZIP archive & launch .sh script in SSH
+      if (hasZip) {
+        try {
+          if (log) log.textContent += `[POST-CREATION ZIP] Deploying archive to /content…\n`;
+          let remoteZipPath = '/content/_post_creation_archive_' + Date.now().toString(36) + '.zip';
+
+          if (hasLocalZip) {
+            const fileObj = storedZip.file || storedZip;
+            const fileName = fileObj.name || ('upload_' + Date.now().toString(36) + '.zip');
+            remoteZipPath = '/content/' + fileName;
+            if (log) log.textContent += `• Uploading "${fileName}" from smartphone to /content…\n`;
+
+            let bodyToSend = fileObj;
+            try {
+              if (typeof fileObj.arrayBuffer === 'function') {
+                bodyToSend = await fileObj.arrayBuffer();
+              } else {
+                bodyToSend = await new Promise((res, rej) => {
+                  const reader = new FileReader();
+                  reader.onload = () => res(reader.result);
+                  reader.onerror = () => rej(reader.error || new Error('FileReader error'));
+                  reader.readAsArrayBuffer(fileObj);
+                });
+              }
+            } catch (e) {
+              console.warn('[ZIP UPLOAD] ArrayBuffer fallback:', e);
+              bodyToSend = fileObj;
+            }
+
+            const q = '?name=' + encodeURIComponent(fileName) +
+                      '&path=' + encodeURIComponent('/content') +
+                      '&session=' + encodeURIComponent(sessionName);
+            const headers = {
+              'Content-Type': 'application/octet-stream',
+              'x-file-name': encodeURIComponent(fileName),
+              'x-file-path': encodeURIComponent('/content'),
+              'x-session': sessionName
+            };
+
+            const upRes = await apiFetch('/api/files/upload' + q, {
+              method: 'POST',
+              headers,
+              body: bodyToSend
+            });
+            const upData = await upRes.json();
+            if (!upData || !upData.success) {
+              throw new Error('Upload failed: ' + ((upData && (upData.error || upData.output)) || 'HTTP ' + upRes.status));
+            }
+            if (upData.remotePath) remoteZipPath = upData.remotePath;
+            if (log) log.textContent += `✓ Upload complete: ${remoteZipPath}\n`;
+          }
+
+          if (log) log.textContent += `• Unpacking folders and files to /content, removing .zip…\n`;
+
+          const pyUnpacker = [
+            'import os, sys, zipfile, json, urllib.request',
+            'target_dir = "/content"',
+            'remote_zip = ' + JSON.stringify(remoteZipPath) + '',
+            'zip_url = ' + JSON.stringify(hasRemoteZip ? zipUrlVal : '') + '',
+            'out = {"success": False, "scripts": [], "chosenScript": None, "extracted": 0, "deleted": False, "error": None}',
+            'try:',
+            '    if zip_url and not os.path.exists(remote_zip):',
+            '        urllib.request.urlretrieve(zip_url, remote_zip)',
+            '    if not os.path.exists(remote_zip):',
+            '        raise FileNotFoundError(f"Archive not found: {remote_zip}")',
+            '    with zipfile.ZipFile(remote_zip, "r") as zf:',
+            '        items = zf.infolist()',
+            '        out["extracted"] = len(items)',
+            '        zf.extractall(target_dir)',
+            '        sh_list = [i.filename for i in items if i.filename.endswith(".sh") and not i.filename.startswith("__MACOSX") and not i.is_dir()]',
+            '        out["scripts"] = sh_list',
+            '    try:',
+            '        os.remove(remote_zip)',
+            '        out["deleted"] = True',
+            '    except Exception as del_err:',
+            '        out["del_err"] = str(del_err)',
+            '    for root, dirs, files in os.walk(target_dir):',
+            '        for f in files:',
+            '            if f.endswith(".sh"):',
+            '                try: os.chmod(os.path.join(root, f), 0o755)',
+            '                except Exception: pass',
+            '    root_sh = [s for s in sh_list if "/" not in s]',
+            '    if root_sh:',
+            '        order = ["setup.sh", "start.sh", "run.sh", "install.sh", "main.sh"]',
+            '        chosen = None',
+            '        for pref in order:',
+            '            if pref in root_sh: chosen = pref; break',
+            '        out["chosenScript"] = chosen or sorted(root_sh)[0]',
+            '    elif sh_list:',
+            '        out["chosenScript"] = sorted(sh_list, key=len)[0]',
+            '    out["success"] = True',
+            'except Exception as err:',
+            '    out["error"] = str(err)',
+            'print("COLAB_POST_ZIP_JSON:" + json.dumps(out))'
+          ].join('\n');
+
+          const execRes = await apiFetch('/api/exec', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session: sessionName,
+              code: pyUnpacker,
+              isBash: false,
+              timeout: 180
+            })
+          });
+          const execData = await execRes.json();
+          const stdout = (execData && execData.stdout) || '';
+          let unpackInfo = null;
+          const marker = 'COLAB_POST_ZIP_JSON:';
+          const mIdx = stdout.indexOf(marker);
+          if (mIdx !== -1) {
+            try {
+              const jsonText = stdout.slice(mIdx + marker.length).trim().split('\n')[0];
+              unpackInfo = JSON.parse(jsonText);
+            } catch (_) {}
+          }
+
+          if (!unpackInfo || !unpackInfo.success) {
+            throw new Error((unpackInfo && unpackInfo.error) || (execData && (execData.stderr || execData.error)) || 'Unpack failed');
+          }
+
+          if (log) {
+            log.textContent += `✓ Unpacked ${unpackInfo.extracted} file(s) into /content.\n` +
+              `✓ Original .zip deleted (${unpackInfo.deleted ? 'OK' : 'Notice: ' + (unpackInfo.del_err || '')}).\n`;
+          }
+
+          if (unpackInfo.chosenScript) {
+            const scriptName = unpackInfo.chosenScript;
+            if (log) {
+              log.textContent += `✓ Found bash script: "${scriptName}".\n` +
+                `➔ Launching in SSH terminal tab…\n`;
+              log.className = 'log-box ok';
+            }
+            showToast(`✓ ZIP deployed. Running ${scriptName} in SSH…`);
+
+            const sshCmd = `cd /content && bash "${scriptName}"`;
+            executeInSshTerminal(sshCmd);
+          } else {
+            if (log) {
+              log.textContent += `ℹ Archive extracted. No .sh script found in archive.\n`;
+              log.className = 'log-box ok';
+            }
+            showToast('✓ ZIP extracted into /content');
+          }
+        } catch (zipErr) {
+          if (log) {
+            log.className = 'log-box err';
+            log.textContent += `\n[ZIP ERROR] ${zipErr.message}\n`;
+          }
+          showToast('⚠ Post-creation ZIP error: ' + zipErr.message);
         }
-        showToast('Auto-install error: ' + err.message);
       }
     }
 
-    async function installPackagesManual() {
+    async function runPostCreationManual() {
       const sess = (activeSession || document.getElementById('newSessName')?.value || '').trim();
       const log = document.getElementById('autoInstallLog');
       const btn = document.getElementById('btnInstallPackagesNow');
@@ -4768,6 +5186,9 @@
       if (!sess) {
         showToast('No active session selected');
         if (log) {
+          const body = document.getElementById('autoInstallBody');
+          const chevron = document.getElementById('autoInstallChevron');
+          if (body) { body.style.display = 'flex'; if (chevron) chevron.textContent = '▼'; }
           log.style.display = 'block';
           log.className = 'log-box err';
           log.textContent = 'Error: Please select an active session or specify session name first.';
@@ -4777,10 +5198,14 @@
 
       if (btn) btn.disabled = true;
       try {
-        await runAutoInstall(sess);
+        await runPostCreationWorkflow(sess);
       } finally {
         if (btn) btn.disabled = false;
       }
+    }
+
+    async function installPackagesManual() {
+      return runPostCreationManual();
     }
 
     let driveMountJobId = localStorage.getItem('colab_drive_job') || null;
