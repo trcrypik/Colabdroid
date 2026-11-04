@@ -4,25 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>COLAB // REAL TERMINAL</title>
-  <style id="ghostty-term-styles">
-    #xtermBox, #xtermBoxExtra {
-      position: relative;
-      flex: 1;
-      min-height: 0;
-      padding: 4px;
-      overflow: hidden;
-      outline: none;
-      user-select: text;
-      -webkit-user-select: text;
-    }
-    #xtermBox canvas, #xtermBoxExtra canvas {
-      display: block;
-      touch-action: none;
-    }
-    #xtermBox:focus, #xtermBoxExtra:focus {
-      outline: none;
-    }
-  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <style>
     :root {
       --bg: #07090e; --card-bg: #0d121d; --border: #1f2b3e;
@@ -2092,12 +2074,9 @@
     </div>
   </div>
 
-  <script src="/vendor/ghostty/ghostty-web.js"></script>
-  <script>
-    if (typeof GhosttyWeb === 'undefined') {
-      document.write('<script src="https://cdn.jsdelivr.net/npm/ghostty-web@0.4.0/dist/ghostty-web.umd.cjs"><\/script>');
-    }
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
   <script>
     try { window.localStorage.getItem('__test'); } catch (e) {
       const _memStore = {};
@@ -2110,177 +2089,6 @@
           }
         });
       } catch (_) {}
-    }
-
-    // Ghostty Web (libghostty) Engine & xterm.js compatibility layer
-    const ghosttyInitPromise = (async () => {
-      try {
-        if (typeof GhosttyWeb === 'undefined') {
-          console.warn('[GHOSTTY] GhosttyWeb not yet defined, waiting...');
-          for (let i = 0; i < 20 && typeof GhosttyWeb === 'undefined'; i++) {
-            await new Promise(r => setTimeout(r, 50));
-          }
-        }
-        if (typeof GhosttyWeb !== 'undefined' && typeof GhosttyWeb.init === 'function') {
-          await GhosttyWeb.init();
-          console.log('[GHOSTTY] libghostty WASM engine initialized');
-        } else {
-          console.error('[GHOSTTY] GhosttyWeb library unavailable');
-        }
-      } catch (err) {
-        console.error('[GHOSTTY] Failed to initialize Ghostty WASM engine:', err);
-      }
-    })();
-
-    // Ensure FitAddon namespace matches xterm.js addon-fit API
-    window.FitAddon = {
-      FitAddon: function() {
-        if (typeof GhosttyWeb !== 'undefined' && GhosttyWeb.FitAddon) {
-          return new GhosttyWeb.FitAddon();
-        }
-        return { activate: () => {}, fit: () => {}, dispose: () => {} };
-      }
-    };
-
-    // Ensure WebLinksAddon compatibility
-    window.WebLinksAddon = {
-      WebLinksAddon: function(handler) {
-        return {
-          activate: (termInstance) => {
-            if (termInstance) termInstance._customLinkHandler = handler;
-          },
-          dispose: () => {}
-        };
-      }
-    };
-
-    // Enhancements to GhosttyWeb.Terminal prototype
-    if (typeof GhosttyWeb !== 'undefined' && GhosttyWeb.Terminal) {
-      window.Terminal = GhosttyWeb.Terminal;
-
-      // 1. applicationCursorKeysMode support (DEC mode 1) for mc / opencode / vim / etc.
-      if (!Object.getOwnPropertyDescriptor(GhosttyWeb.Terminal.prototype, 'modes')) {
-        Object.defineProperty(GhosttyWeb.Terminal.prototype, 'modes', {
-          get() {
-            const t = this;
-            return {
-              get applicationCursorKeysMode() {
-                try { return !!t.getMode(1, false); } catch (_) { return false; }
-              }
-            };
-          },
-          configurable: true
-        });
-      }
-
-      // 2. refresh() support
-      if (!GhosttyWeb.Terminal.prototype.refresh) {
-        GhosttyWeb.Terminal.prototype.refresh = function() {
-          try {
-            if (this.renderer && this.wasmTerm) {
-              this.renderer.render(this.wasmTerm, true, this.viewportY, this, this.scrollbarOpacity);
-            }
-          } catch (_) {}
-        };
-      }
-
-      // 3. attachCustomKeyEventHandler wrapper (xterm.js: false = suppress; ghostty-web: true = suppress)
-      const _origAttachKey = GhosttyWeb.Terminal.prototype.attachCustomKeyEventHandler;
-      GhosttyWeb.Terminal.prototype.attachCustomKeyEventHandler = function(handler) {
-        return _origAttachKey.call(this, (ev) => {
-          try {
-            const res = handler(ev);
-            return res === false;
-          } catch (e) {
-            return false;
-          }
-        });
-      };
-
-      // 4. open(parent) wrapper: sets helper classes, textarea handling for Android soft keyboards
-      const _origOpen = GhosttyWeb.Terminal.prototype.open;
-      GhosttyWeb.Terminal.prototype.open = function(parent) {
-        _origOpen.call(this, parent);
-        if (this.textarea) {
-          this.textarea.classList.add('xterm-helper-textarea');
-          this.textarea.addEventListener('input', () => {
-            if (this.textarea && this.textarea.value) {
-              const val = this.textarea.value;
-              this.textarea.value = '';
-              this.input(val, true);
-            }
-          });
-          this.textarea.addEventListener('keydown', (ev) => {
-            if (ev.key === 'Backspace' && !ev.isComposing) {
-              this.input('\x7f', true);
-            }
-          });
-        }
-        if (this.element) {
-          this.element.classList.add('xterm');
-          this.element.style.position = 'relative';
-          this.element.style.outline = 'none';
-        }
-        if (this._pendingWrites && this._pendingWrites.length) {
-          const writes = this._pendingWrites;
-          this._pendingWrites = [];
-          for (const item of writes) {
-            _origWrite.call(this, item.data, item.cb);
-          }
-        }
-      };
-
-      // 5. write() wrapper to safely buffer writes before open
-      const _origWrite = GhosttyWeb.Terminal.prototype.write;
-      GhosttyWeb.Terminal.prototype.write = function(data, cb) {
-        if (!this.isOpen) {
-          this._pendingWrites = this._pendingWrites || [];
-          this._pendingWrites.push({ data, cb });
-          return;
-        }
-        return _origWrite.call(this, data, cb);
-      };
-
-      // 6. focus() & blur() wrappers
-      const _origFocus = GhosttyWeb.Terminal.prototype.focus;
-      GhosttyWeb.Terminal.prototype.focus = function() {
-        _origFocus.call(this);
-        if (this.textarea && !isAndroidKeyboardLocked) {
-          try { this.textarea.focus(); } catch (_) {}
-        }
-      };
-      const _origBlur = GhosttyWeb.Terminal.prototype.blur;
-      GhosttyWeb.Terminal.prototype.blur = function() {
-        _origBlur.call(this);
-        if (this.textarea) {
-          try { this.textarea.blur(); } catch (_) {}
-        }
-      };
-
-      // 7. Custom Link Provider support in UrlRegexProvider
-      if (GhosttyWeb.UrlRegexProvider) {
-        const _origProvideLinks = GhosttyWeb.UrlRegexProvider.prototype.provideLinks;
-        GhosttyWeb.UrlRegexProvider.prototype.provideLinks = function(row, cb) {
-          _origProvideLinks.call(this, row, (links) => {
-            if (!links || !links.length) return cb(links);
-            const termInstance = this.terminal;
-            const customHandler = termInstance._customLinkHandler || (termInstance.options && termInstance.options.linkHandler && termInstance.options.linkHandler.activate);
-            if (customHandler) {
-              links.forEach(link => {
-                const origActivate = link.activate;
-                link.activate = (ev) => {
-                  try {
-                    customHandler(ev, link.text);
-                  } catch (e) {
-                    origActivate(ev);
-                  }
-                };
-              });
-            }
-            cb(links);
-          });
-        };
-      }
     }
     let activeSession = localStorage.getItem('colab_active_session') || '';
     let termMode = localStorage.getItem('colab_term_mode') || 'pty';
@@ -2882,27 +2690,16 @@
         if (btnSsh) btnSsh.classList.add('active-header-tab');
         if (btnExec) btnExec.classList.remove('active-header-tab');
         if (tmuxDropdown) tmuxDropdown.style.display = 'inline-flex';
-        if (!termExtra) {
-          initXtermExtra().then(() => {
-            if (fitAddonExtra) {
-              try { fitAddonExtra.fit(); sendResizeExtra(); } catch (_) {}
-            }
-            if (termExtra) {
-              try { termExtra.focus(); } catch (_) {}
-            }
-            if (!wsExtra || wsExtra.readyState > 1) connectPtyExtra();
-          });
-        } else {
-          if (!wsExtra || wsExtra.readyState > 1) connectPtyExtra();
-          setTimeout(() => {
-            if (fitAddonExtra) {
-              try { fitAddonExtra.fit(); sendResizeExtra(); } catch (_) {}
-            }
-            if (termExtra) {
-              try { termExtra.focus(); } catch (_) {}
-            }
-          }, 50);
-        }
+        if (!termExtra) initXtermExtra();
+        if (!wsExtra || wsExtra.readyState > 1) connectPtyExtra();
+        setTimeout(() => {
+          if (fitAddonExtra) {
+            try { fitAddonExtra.fit(); sendResizeExtra(); } catch (_) {}
+          }
+          if (termExtra) {
+            try { termExtra.focus(); } catch (_) {}
+          }
+        }, 50);
         setStatus(lastPtyExtraStatus || (wsExtra && wsExtra.readyState === WebSocket.OPEN ? 'SSH+ ONLINE' : 'OFFLINE'), lastPtyExtraStatusColor || 'var(--text)');
       } else {
         if (xBoxExtra) xBoxExtra.style.display = 'none';
@@ -2959,9 +2756,7 @@
       reconnectTerm();
     }
 
-    async function initXterm() {
-      if (term) return;
-      await ghosttyInitPromise;
+    function initXterm() {
       if (term) return;
       let curSize = 13;
       let curFont = 'mono';
@@ -3055,9 +2850,7 @@
       if (window.ResizeObserver) new ResizeObserver(refit).observe(document.getElementById('xtermBox'));
     }
 
-    async function initXtermExtra() {
-      if (termExtra) return;
-      await ghosttyInitPromise;
+    function initXtermExtra() {
       if (termExtra) return;
       let curSize = 13;
       let curFont = 'mono';
@@ -4514,9 +4307,8 @@
         }
       }
     });
-    async function connectPty() {
-      await initXterm();
-      if (!term) return;
+    function connectPty() {
+      initXterm();
       if (!activeSession) {
         setStatus('NO SESSION', 'var(--amber)');
         term.writeln('\x1b[33mNo session selected. SESSIONS → [CREATE] or [USE].\x1b[0m');
@@ -4587,9 +4379,8 @@
       };
       sock.onerror = () => { if (ws === sock) setStatus('WS ERROR', 'var(--red)'); };
     }
-    async function connectPtyExtra() {
-      await initXtermExtra();
-      if (!termExtra) return;
+    function connectPtyExtra() {
+      initXtermExtra();
       if (!activeSession) {
         if (currentExecSubView === 'ssh_plus') setStatus('NO SESSION', 'var(--amber)');
         termExtra.writeln('\x1b[33mNo session selected. SESSIONS → [CREATE] or [USE].\x1b[0m');
@@ -7318,7 +7109,7 @@
               sendResize();
             }
           } catch (e) {
-            console.warn('Ошибка применения шрифта к ghostty term:', e);
+            console.warn('Ошибка применения шрифта к xterm:', e);
           }
         }
         if (termExtra) {
@@ -7330,7 +7121,7 @@
               sendResizeExtra();
             }
           } catch (e) {
-            console.warn('Ошибка применения шрифта к ghostty termExtra:', e);
+            console.warn('Ошибка применения шрифта к xtermExtra:', e);
           }
         }
       }
